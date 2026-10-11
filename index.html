@@ -149,7 +149,7 @@ td button{padding:4px 10px;font-size:12px}
     <label class="f">Your futures leverage (×)<input id="s_lev" type="number" min="1" max="125" step="1"></label>
     <label class="f">Spot fee per side (%)<input id="s_spotFee" type="number" min="0" max="0.5" step="0.01"></label>
     <label class="f">Ready score threshold<input id="s_ready" type="number" min="55" max="90" step="1"></label>
-    <label class="f">Min indicators agreeing (of 20)<input id="s_minInd" type="number" min="5" max="20" step="1"></label>
+    <label class="f">Min indicator agreement (%)<input id="s_indPct" type="number" min="30" max="95" step="1"></label>
     <label class="f">Trade direction<select id="s_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
     <label class="f chk"><input id="s_futOnly" type="checkbox"> Only coins with futures</label>
     <label class="f chk"><input id="s_sound" type="checkbox"> Sound on new signal</label>
@@ -241,7 +241,7 @@ td button{padding:4px 10px;font-size:12px}
       <li><b>Futures (4):</b> funding rate, open interest change, futures taker buy/sell, retail long/short ratio (read as a crowding signal).</li>
       <li><b>Context (1):</b> Fear &amp; Greed. Market-cap rank and CoinGecko trending appear as tags.</li>
     </ul>
-    <p><b>20-indicator confirmation:</b> EMA 9/21/50, RSI, MACD, Supertrend, VWAP, Bollinger Bands, ATR, ADX, Stochastic, Ichimoku Cloud, Fibonacci retracement, Parabolic SAR, SMA 50/200, Stochastic RSI, CCI, OBV, Donchian Channels, Keltner Channels, daily Pivot Points and Williams %R. Each votes BUY, SELL or NEUTRAL, mostly on the 15m chart (Ichimoku, Fibonacci and SMA on 1h, Pivots on the daily). They confirm the score rather than adding to it, so the same signal isn't counted twice.</p>
+    <p><b>29-indicator confirmation</b> (your list): Supertrend, Ichimoku Cloud, RSI, MACD, VWAP, ADX/DMI, Bollinger Bands, Stochastic RSI, EMA 9/21/50/200, Volume Profile, ATR, Parabolic SAR, CCI, Williams %R, Keltner Channels, Donchian Channels, Hull MA, Average Volume, Pivot Points Standard, OBV, plus the direction indicators UT Bot Alerts, AlphaTrend, HalfTrend, QQE MOD, WaveTrend, SSL Hybrid, Buy/Sell Volume Pressure, TradingView Technical Ratings and Lorentzian Classification (Supertrend is in both lists and counts once). Each votes BUY, SELL or NEUTRAL, mostly on the 15m chart (Ichimoku on 1h, Pivots on the daily, VWAP on 5m). Every trade records every vote, so each indicator builds its own <b>win %</b>; higher win % counts more. They confirm the score rather than adding to it.</p>
     <p><b>READY</b> needs a score at or above your threshold (default 70) and must pass all 9 safety gates: volatility in a tradable range, RSI not stretched, tight spread, volume or whales confirming, room to reach TP1 before the 24h high/low, not overextended on the day (±30%), enough order book liquidity, enough of the 20 confirmation indicators agreeing, and for shorts, the coin must have Binance futures (spot-only coins can't be shorted). A high score that fails a gate shows as <b>WATCH</b>.</p>
     <p><b>Levels:</b> stop loss sits beyond the recent 1-hour swing on the 5m chart, limited to 0.5–2.5× ATR. Targets are 1R, 2R and 3R. A common way to manage it: take part profit at TP1 and move the stop to entry.</p>
     <p><b>Position size</b> uses your account size and risk %, so hitting the stop loses only that percentage.</p>
@@ -253,15 +253,15 @@ td button{padding:4px 10px;font-size:12px}
 <div class="backdrop" id="backdrop" hidden></div>
 <aside class="drawer" id="drawer" hidden aria-label="Coin details"></aside>
 
-<script src="agent-core.js?v=6"></script>
+<script src="agent-core.js?v=7"></script>
 <script>
 'use strict';
 /* ---------- settings ---------- */
-const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,lev:10,spotFee:0.1,exitMode:'off',side:'BOTH',futOnly:false,sound:false,auto:true};
+const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,indPct:58,lev:10,spotFee:0.1,exitMode:'off',side:'BOTH',futOnly:false,sound:false,auto:true};
 let S=Object.assign({},DEF);
 try{Object.assign(S,JSON.parse(localStorage.getItem('scalpRadarV1')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('scalpRadarV1',JSON.stringify(S))}catch(e){}}
-S.exitMode='off';S.exitV=3;// exits: take-profit or stop-loss only
+S.exitMode='off';S.exitV=3;if(S.indV!==2){S.indPct=58;S.indV=2}// exits: take-profit or stop-loss only
 
 const $=s=>document.querySelector(s);
 const clamp=(x,a=-1,b=1)=>Math.max(a,Math.min(b,isFinite(x)?x:0));
@@ -348,7 +348,7 @@ async function loadCoinGecko(){
 }
 async function loadFng(){try{const j=await getJSON('https://api.alternative.me/fng/?limit=1',8000);return{v:+j.data[0].value,t:j.data[0].value_classification}}catch(e){return null}}
 
-/* ---------- 20-indicator confirmation panel ---------- */
+/* ---------- indicator helpers ---------- */
 function smaAt(a,p,i=a.length-1){return avg(a.slice(i-p+1,i+1))}
 function macdFull(c){const a=emaArr(c,12),b=emaArr(c,26),m=a.map((x,i)=>x-b[i]),s=emaArr(m,9);return{m:m[m.length-1],s:s[s.length-1]}}
 function stochK(h,l,c,p=14){const n=c.length,raw=[];for(let i=n-p-5;i<n;i++){const hh=Math.max(...h.slice(i-p+1,i+1)),ll=Math.min(...l.slice(i-p+1,i+1));raw.push(hh===ll?50:(c[i]-ll)/(hh-ll)*100)}
@@ -363,65 +363,121 @@ function willr(h,l,c,p=14){const n=c.length,hh=Math.max(...h.slice(n-p)),ll=Math
 function ichimoku(h,l,c){const n=c.length,mid=(p,i)=>(Math.max(...h.slice(i-p+1,i+1))+Math.min(...l.slice(i-p+1,i+1)))/2,j=n-1-26;
   const sA=(mid(9,j)+mid(26,j))/2,sB=mid(52,j);return{ten:mid(9,n-1),kij:mid(26,n-1),top:Math.max(sA,sB),bot:Math.min(sA,sB)}}
 
-function indicators20(k5,k15,k1,d){
-  const I=[];const v=(name,tf,vote,val)=>I.push({name,tf,vote,val});
-  const c=k15.c,h=k15.h,l=k15.l,n=c.length,p=c[n-1];
-  // 1 EMA
-  const e9=emaArr(c,9)[n-1],e21=emaArr(c,21)[n-1],e50=emaArr(c,50)[n-1];
-  v('EMA 9/21/50','15m',p>e21&&e9>e21&&e21>e50?1:p<e21&&e9<e21&&e21<e50?-1:0,e9>e21&&e21>e50?'Stacked bullish':e9<e21&&e21<e50?'Stacked bearish':'Mixed, not stacked');
-  // 2 RSI
-  const r=rsi(c);v('RSI (14)','15m',r>55&&r<75?1:r<45&&r>25?-1:0,r.toFixed(1)+(r>=75?' · overbought':r<=25?' · oversold':''));
-  // 3 MACD
-  const md=macdFull(c);v('MACD (12,26,9)','15m',md.m>md.s?1:md.m<md.s?-1:0,`MACD ${md.m>md.s?'above':'below'} signal, ${md.m>0?'above':'below'} zero`);
-  // 4 Supertrend
-  const st=supertrend(h,l,c);v('Supertrend (10,3)','15m',st.dir,`${st.dir>0?'Bullish':'Bearish'}, line ${fp(st.line)}`);
-  // 5 VWAP
-  const vd=(d.price-d.vwap)/d.vwap*100;v('VWAP','5m',vd>0.05?1:vd<-0.05?-1:0,`Price ${vd>=0?'above':'below'} VWAP ${fp(d.vwap)} (${pct(vd)})`);
-  // 6 Bollinger
-  const bo=boll(c);v('Bollinger Bands (20,2)','15m',(p>bo.up&&bo.width<bo.avgW)||(p<bo.lo&&bo.width<bo.avgW)?0:p>bo.mid?1:p<bo.mid?-1:0,
-    p>bo.up?'Above upper band':p<bo.lo?'Below lower band':`${p>bo.mid?'Above':'Below'} middle band${bo.width<bo.avgW*0.7?' · squeeze':''}`);
-  // 7 ATR
-  const aNow=atr(h,l,c),aPrev=atr(h.slice(0,n-10),l.slice(0,n-10),c.slice(0,n-10)),aChg=(aNow-aPrev)/aPrev*100,mv=Math.sign(c[n-1]-c[n-4]);
-  v('ATR (14)','15m',aChg>5?mv:0,`${fp(aNow)} · ${aChg>5?'expanding '+pct(aChg)+', move has energy':'flat/contracting, no expansion'}`);
-  // 8 ADX
-  const ax=adx(h,l,c);v('ADX (14)','15m',ax.adx>=20?Math.sign(ax.pdi-ax.mdi):0,`ADX ${ax.adx.toFixed(0)}${ax.adx<20?' · weak trend':''}, +DI ${ax.pdi.toFixed(0)} / −DI ${ax.mdi.toFixed(0)}`);
-  // 9 Stochastic
-  const so=stochK(h,l,c);v('Stochastic (14,3,3)','15m',so.k>so.d&&so.k<80?1:so.k<so.d&&so.k>20?-1:0,`%K ${so.k.toFixed(0)} / %D ${so.d.toFixed(0)}${so.k>=80?' · overbought':so.k<=20?' · oversold':''}`);
-  // 10 Ichimoku (1h)
-  const ic=ichimoku(k1.h,k1.l,k1.c),p1=k1.c[k1.c.length-1];
-  v('Ichimoku Cloud','1h',p1>ic.top&&ic.ten>ic.kij?1:p1<ic.bot&&ic.ten<ic.kij?-1:0,`Price ${p1>ic.top?'above':p1<ic.bot?'below':'inside'} the cloud, Tenkan ${ic.ten>ic.kij?'above':'below'} Kijun`);
-  // 11 Fibonacci (1h, last 48 bars)
-  const H=k1.h.slice(-48),L=k1.l.slice(-48),hi=Math.max(...H),lo=Math.min(...L),rg=(hi-lo)||1e-12,upSwing=H.indexOf(hi)>L.indexOf(lo);
-  const ret=upSwing?(hi-p1)/rg:(p1-lo)/rg;
-  v('Fibonacci retracement','1h',ret<=0.618?(upSwing?1:-1):ret>0.786?(upSwing?-1:1):0,
-    `${upSwing?'Up':'Down'}-swing ${fp(lo)}–${fp(hi)}, price at ${(ret*100).toFixed(0)}% retracement${ret>=0.382&&ret<=0.618?' · golden zone':ret>0.786?' · swing failed':''}`);
-  // 12 Parabolic SAR
-  const ps=psar(h,l);v('Parabolic SAR','15m',ps.up?1:-1,`SAR ${fp(ps.sar)} ${ps.up?'below':'above'} price`);
-  // 13 SMA (1h 50/200)
-  const s50=smaAt(k1.c,50),s200=smaAt(k1.c,200);
-  v('SMA 50/200','1h',p1>s50&&s50>s200?1:p1<s50&&s50<s200?-1:0,`Price ${p1>s50?'above':'below'} SMA50, SMA50 ${s50>s200?'above':'below'} SMA200 (${s50>s200?'golden':'death'} cross side)`);
-  // 14 Stoch RSI
-  const sr=stochRsi(c);v('Stochastic RSI','15m',sr.k>sr.d&&sr.k<80?1:sr.k<sr.d&&sr.k>20?-1:0,`K ${sr.k.toFixed(0)} / D ${sr.d.toFixed(0)}`);
-  // 15 CCI
-  const cc=cci(h,l,c);v('CCI (20)','15m',cc.now>50&&cc.now<250&&cc.now>=cc.prev?1:cc.now<-50&&cc.now>-250&&cc.now<=cc.prev?-1:0,`${cc.now.toFixed(0)} ${cc.now>=cc.prev?'rising':'falling'}${Math.abs(cc.now)>=250?' · extreme':''}`);
-  // 16 OBV
-  let ob=0;const obs=[0];for(let i=1;i<n;i++){const bv=k15.v[i]/c[i];ob+=c[i]>c[i-1]?bv:c[i]<c[i-1]?-bv:0;obs.push(ob)}
-  const obvS=(obs[n-1]-obs[n-21])/((sum(k15.v.slice(n-20).map((x,i)=>x/c[n-20+i])))||1);
-  v('OBV','15m',obvS>0.05?1:obvS<-0.05?-1:0,`${obvS>0.05?'Rising, accumulation':obvS<-0.05?'Falling, distribution':'Flat'} over 20 candles`);
-  // 17 Donchian
-  const dh=Math.max(...h.slice(n-21,n-1)),dl=Math.min(...l.slice(n-21,n-1)),dp=(p-dl)/((dh-dl)||1e-12);
-  v('Donchian Channels (20)','15m',p>=dh||dp>0.75?1:p<=dl||dp<0.25?-1:0,p>=dh?'Breakout above 20-candle high':p<=dl?'Breakdown below 20-candle low':`At ${(dp*100).toFixed(0)}% of the channel`);
-  // 18 Keltner
-  const km=emaArr(c,20)[n-1],ka=atr(h,l,c,10),ku=km+2*ka,kl=km-2*ka;
-  v('Keltner Channels (20,2)','15m',p>km+0.1*ka?1:p<km-0.1*ka?-1:0,p>ku?'Above upper channel, strong push':p<kl?'Below lower channel, strong drop':`${p>=km?'Above':'Below'} middle line ${fp(km)}`);
-  // 19 Pivot points (classic, previous UTC day)
-  const day0=Math.floor(Date.now()/864e5)*864e5,idx=k1.t.map((t,i)=>t>=day0-864e5&&t<day0?i:-1).filter(i=>i>=0);
-  if(idx.length>=20){const PH=Math.max(...idx.map(i=>k1.h[i])),PL=Math.min(...idx.map(i=>k1.l[i])),PC=k1.c[idx[idx.length-1]],P=(PH+PL+PC)/3,R1=2*P-PL,S1=2*P-PH;
-    v('Pivot Points (daily)','1D',p>P&&!(p<R1&&R1-p<d.atr*0.5)?1:p<P&&!(p>S1&&p-S1<d.atr*0.5)?-1:0,`P ${fp(P)} · R1 ${fp(R1)} · S1 ${fp(S1)}, price ${p>P?'above':'below'} pivot`)}
-  else v('Pivot Points (daily)','1D',0,'Not enough data for yesterday');
-  // 20 Williams %R
-  const wr=willr(h,l,c);v('Williams %R (14)','15m',wr>-50&&wr<-20?1:wr<-50&&wr>-80?-1:0,`${wr.toFixed(0)}${wr>=-20?' · overbought':wr<=-80?' · oversold':''}`);
-  return I;
+/* ---------- confirmation indicators: your 29 TradingView indicators, ranked by win % in your trade history ---------- */
+function smaArr(a,p){const o=new Array(a.length).fill(NaN);let s=0;for(let i=0;i<a.length;i++){s+=a[i];if(i>=p)s-=a[i-p];if(i>=p-1)o[i]=s/p}return o}
+function wmaArr(a,p){const o=new Array(a.length).fill(NaN),den=p*(p+1)/2;for(let i=p-1;i<a.length;i++){let s=0,ok=true;for(let j=0;j<p;j++){const x=a[i-j];if(!isFinite(x)){ok=false;break}s+=x*(p-j)}if(ok)o[i]=s/den}return o}
+function hmaArr(a,p){const h=wmaArr(a,Math.floor(p/2)),f=wmaArr(a,p);return wmaArr(a.map((_,i)=>2*h[i]-f[i]),Math.round(Math.sqrt(p)))}
+function atrArr(h,l,c,p){const n=c.length,tr=[h[0]-l[0]];for(let i=1;i<n;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));
+  const o=new Array(n).fill(NaN);if(n<p)return o;let a=avg(tr.slice(0,p));o[p-1]=a;for(let i=p;i<n;i++){a=(a*(p-1)+tr[i])/p;o[i]=a}return o}
+function stdevAt(a,p,i){const s=a.slice(i-p+1,i+1),m=avg(s);return Math.sqrt(avg(s.map(x=>(x-m)**2)))}
+function cciArr(h,l,c,p=20){const tp=c.map((x,i)=>(h[i]+l[i]+x)/3);return tp.map((x,i)=>{if(i<p-1)return 0;const s=tp.slice(i-p+1,i+1),m=avg(s),md=avg(s.map(y=>Math.abs(y-m)));return md?(x-m)/(0.015*md):0})}
+function adxArr(h,l,c,p=14){const n=c.length,o=new Array(n).fill(20);let sT=0,sP=0,sM=0,a=null;const dx=[];
+  for(let i=1;i<n;i++){const u=h[i]-h[i-1],d=l[i-1]-l[i],P=u>d&&u>0?u:0,M=d>u&&d>0?d:0,T=Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1]));
+    if(i<=p){sT+=T;sP+=P;sM+=M;if(i<p)continue}else{sT=sT-sT/p+T;sP=sP-sP/p+P;sM=sM-sM/p+M}
+    const pd=100*sP/(sT||1),md=100*sM/(sT||1),x=100*Math.abs(pd-md)/((pd+md)||1);dx.push(x);
+    if(dx.length===p)a=avg(dx);else if(dx.length>p)a=(a*(p-1)+x)/p;if(a!=null)o[i]=a}return o}
+function mfiArr(h,l,c,v,p=14){const tp=c.map((x,i)=>(h[i]+l[i]+x)/3),o=new Array(c.length).fill(50);
+  for(let i=p;i<c.length;i++){let pos=0,neg=0;for(let j=i-p+1;j<=i;j++){const mf=tp[j]*v[j];if(tp[j]>tp[j-1])pos+=mf;else if(tp[j]<tp[j-1])neg+=mf}o[i]=neg===0?100:100-100/(1+pos/neg)}return o}
+function utBot(c,at,key=1){let st=c[0];for(let i=1;i<c.length;i++){if(!isFinite(at[i])){st=c[i];continue}const p=st,nL=key*at[i];
+  if(c[i]>p&&c[i-1]>p)st=Math.max(p,c[i]-nL);else if(c[i]<p&&c[i-1]<p)st=Math.min(p,c[i]+nL);else st=c[i]>p?c[i]-nL:c[i]+nL}return st}
+function alphaTrend(h,l,c,v,coeff=1,p=14){const at=atrArr(h,l,c,p),mfi=mfiArr(h,l,c,v,p),A=c.slice();
+  for(let i=1;i<c.length;i++){if(!isFinite(at[i])){A[i]=c[i];continue}const up=l[i]-at[i]*coeff,dn=h[i]+at[i]*coeff;A[i]=mfi[i]>=50?(up<A[i-1]?A[i-1]:up):(dn>A[i-1]?A[i-1]:dn)}return A}
+function halfTrend(h,l,c,amp=2){// state starts undecided (the original assumes up, which biases it bullish)
+  let trend=null,maxLow=l[0],minHigh=h[0];
+  for(let i=1;i<c.length;i++){const s=Math.max(0,i-amp+1),lo=Math.min(...l.slice(s,i+1)),hi=Math.max(...h.slice(s,i+1)),lowma=avg(l.slice(s,i+1)),highma=avg(h.slice(s,i+1));
+    maxLow=Math.max(lo,maxLow);minHigh=Math.min(hi,minHigh);
+    if(trend!==-1&&highma<maxLow&&c[i]<l[i-1]){trend=-1;minHigh=hi}
+    else if(trend!==1&&lowma>minHigh&&c[i]>h[i-1]){trend=1;maxLow=lo}}
+  return trend||0}
+function qqeLine(c,rsiLen,sf,qf){const r=rsiArr(c,rsiLen),R=emaArr(r,sf),wil=rsiLen*2-1,atrR=R.map((x,i)=>i?Math.abs(x-R[i-1]):0),dar=emaArr(emaArr(atrR,wil),wil).map(x=>x*qf);
+  const n=c.length,lb=[R[0]-dar[0]],sb=[R[0]+dar[0]],tr=[1],fl=[lb[0]];
+  for(let i=1;i<n;i++){const nL=R[i]-dar[i],nS=R[i]+dar[i];lb[i]=(R[i-1]>lb[i-1]&&R[i]>lb[i-1])?Math.max(lb[i-1],nL):nL;sb[i]=(R[i-1]<sb[i-1]&&R[i]<sb[i-1])?Math.min(sb[i-1],nS):nS;
+    const crossS=i>=2&&Math.sign(R[i]-sb[i-1])!==Math.sign(R[i-1]-sb[i-2]),crossL=i>=2&&Math.sign(lb[i-1]-R[i])!==Math.sign(lb[i-2]-R[i-1]);
+    tr[i]=crossS?1:crossL?-1:tr[i-1];fl[i]=tr[i]===1?lb[i]:sb[i]}return{R,fl}}
+function waveTrend(h,l,c,n1=10,n2=21){const ap=c.map((x,i)=>(h[i]+l[i]+x)/3),esa=emaArr(ap,n1),d=emaArr(ap.map((x,i)=>Math.abs(x-esa[i])),n1),
+  wt1=emaArr(ap.map((x,i)=>(x-esa[i])/(0.015*(d[i]||1e-12))),n2);return{wt1,wt2:smaArr(wt1,4)}}
+function volumeProfile(h,l,c,v,bars=96,bins=24){const s=Math.max(0,c.length-bars),lo=Math.min(...l.slice(s)),hi=Math.max(...h.slice(s)),step=(hi-lo)/bins||1e-12,vol=new Array(bins).fill(0);
+  for(let i=s;i<c.length;i++){const a=Math.max(0,Math.floor((l[i]-lo)/step)),b=Math.min(bins-1,Math.floor((h[i]-lo)/step)),share=v[i]/(b-a+1);for(let k=a;k<=b;k++)vol[k]+=share}
+  const poc=vol.indexOf(Math.max(...vol)),tot=sum(vol);let acc=vol[poc],a=poc,b=poc;
+  while(acc<tot*0.7&&(a>0||b<bins-1)){const va=a>0?vol[a-1]:-1,vb=b<bins-1?vol[b+1]:-1;if(vb>=va){b++;acc+=vol[b]}else{a--;acc+=vol[a]}}
+  return{poc:lo+(poc+0.5)*step,vah:lo+(b+1)*step,val:lo+a*step}}
+function tvRatings(h,l,c,v){const n=c.length,i=n-1,p=c[i],sg=x=>x>0?1:x<0?-1:0;
+  const ma=[];for(const len of [10,20,30,50,100,200]){if(n<len)continue;ma.push(sg(p-smaArr(c,len)[i]));ma.push(sg(p-emaArr(c,len)[i]))}
+  const kij=(Math.max(...h.slice(n-26))+Math.min(...l.slice(n-26)))/2;ma.push(sg(p-kij));
+  const vw=sum(c.slice(n-20).map((x,k)=>x*v[n-20+k]))/(sum(v.slice(n-20))||1);ma.push(sg(p-vw));ma.push(sg(p-hmaArr(c,9)[i]));
+  const os=[],r=rsiArr(c),so=stochK(h,l,c),cc=cciArr(h,l,c),ax=adx(h,l,c),hl2=c.map((x,k)=>(h[k]+l[k])/2),ao=smaArr(hl2,5).map((x,k)=>x-smaArr(hl2,34)[k]),md=macdFull(c),sr=stochRsi(c),wr=willr(h,l,c),e13=emaArr(c,13);
+  os.push(r[i]<30&&r[i]>r[i-1]?1:r[i]>70&&r[i]<r[i-1]?-1:0);
+  os.push(so.k<20&&so.k>so.d?1:so.k>80&&so.k<so.d?-1:0);
+  os.push(cc[i]<-100&&cc[i]>cc[i-1]?1:cc[i]>100&&cc[i]<cc[i-1]?-1:0);
+  os.push(ax.adx>20?sg(ax.pdi-ax.mdi):0);
+  os.push(ao[i]>0&&ao[i]>ao[i-1]?1:ao[i]<0&&ao[i]<ao[i-1]?-1:0);
+  os.push(sg((c[i]-c[i-10])-(c[i-1]-c[i-11])));
+  os.push(sg(md.m-md.s));
+  os.push(sr.k<20&&sr.k>sr.d?1:sr.k>80&&sr.k<sr.d?-1:0);
+  os.push(wr<-80&&c[i]>c[i-1]?1:wr>-20&&c[i]<c[i-1]?-1:0);
+  const bull=h[i]-e13[i],bear=l[i]-e13[i],up=e13[i]>e13[i-1];os.push(up&&bear<0&&bear>l[i-1]-e13[i-1]?1:!up&&bull>0&&bull<h[i-1]-e13[i-1]?-1:0);
+  const bp=[],trr=[];for(let k=1;k<n;k++){bp.push(c[k]-Math.min(l[k],c[k-1]));trr.push(Math.max(h[k],c[k-1])-Math.min(l[k],c[k-1]))}
+  const uo=k=>sum(bp.slice(-k))/(sum(trr.slice(-k))||1),UO=100*(4*uo(7)+2*uo(14)+uo(28))/7;os.push(UO>70?1:UO<30?-1:0);
+  const mR=avg(ma),oR=avg(os);return{rating:(mR+oR)/2,ma:mR,osc:oR}}
+function lorentzian(h,l,c,k=8,ahead=4){const n=c.length,r14=rsiArr(c,14),r9=rsiArr(c,9),wt=waveTrend(h,l,c,10,11).wt1,cc=cciArr(h,l,c,20),ax=adxArr(h,l,c,20);
+  const mm=a=>{const s=a.slice(40),lo=Math.min(...s),hi=Math.max(...s);return a.map(x=>hi>lo?(x-lo)/(hi-lo):0.5)},wtN=mm(wt),ccN=mm(cc);
+  const f=i=>[r14[i]/100,wtN[i],ccN[i],ax[i]/100,r9[i]/100],cur=f(n-1),near=[];
+  for(let i=40;i<n-1-ahead;i+=4){const x=f(i),d=sum(x.map((v,j)=>Math.log(1+Math.abs(v-cur[j]))));near.push([d,Math.sign(c[i+ahead]-c[i])])}
+  near.sort((a,b)=>a[0]-b[0]);const pred=sum(near.slice(0,k).map(x=>x[1]));return{pred,k:Math.min(k,near.length)}}
+
+const IND_LIST=[
+  ['supertrend','Supertrend','Both lists'],['ichimoku','Ichimoku Cloud',''],['rsi','RSI',''],['macd','MACD',''],['vwap','VWAP',''],['adx','ADX / DMI',''],['bb','Bollinger Bands',''],
+  ['stochrsi','Stochastic RSI',''],['ema','EMA 9/21/50/200',''],['vp','Volume Profile',''],['atr','ATR',''],['psar','Parabolic SAR',''],['cci','CCI',''],['wr','Williams %R',''],
+  ['keltner','Keltner Channels',''],['donchian','Donchian Channels',''],['hma','Hull Moving Average',''],['avgvol','Average Volume',''],['pivots','Pivot Points Standard',''],['obv','On-Balance Volume',''],
+  ['utbot','UT Bot Alerts','Direction'],['alpha','AlphaTrend','Direction'],['half','HalfTrend','Direction'],['qqe','QQE MOD','Direction'],['wave','WaveTrend Oscillator','Direction'],
+  ['ssl','SSL Hybrid','Direction'],['pressure','Buy/Sell Volume Pressure','Direction'],['tvr','TradingView Technical Ratings','Direction'],['lorentz','Lorentzian Classification','Direction']];
+const IND_TOTAL=IND_LIST.length;
+let INDSTAT={};// id -> {n,wins,wr,w}, rebuilt from closed demo trades each scan
+function refreshIndStats(){INDSTAT={};const all=[...(D&&D.closed||[]),...(F&&F.closed||[])];
+  for(const [id] of IND_LIST){let n=0,w=0;for(const t of all){const v=t.ctx&&t.ctx.iv?t.ctx.iv[id]:0;if(!v)continue;const s=t.dir==='LONG'?1:-1;if(v!==s)continue;n++;if((t.net??t.pnl)>0)w++}
+    const wr=n?w/n*100:null;INDSTAT[id]={n,wins:w,wr,w:n>=10?Math.max(0.25,Math.min(2,0.25+(wr-35)/20)):1}}}
+
+function indicators29(k5,k15,k1,d){
+  const V={},T=(id,vote,val,tf='15m')=>{V[id]={vote,val,tf}};
+  const c=k15.c,h=k15.h,l=k15.l,v=k15.v.map((x,i)=>x/c[i]),n=c.length,i=n-1,p=c[i],at=atrArr(h,l,c,14);
+  const st=supertrend(h,l,c);T('supertrend',st.dir,`${st.dir>0?'Bullish':'Bearish'}, line ${fp(st.line)}`);
+  const ic=ichimoku(k1.h,k1.l,k1.c),p1=k1.c[k1.c.length-1];T('ichimoku',p1>ic.top&&ic.ten>ic.kij?1:p1<ic.bot&&ic.ten<ic.kij?-1:0,`Price ${p1>ic.top?'above':p1<ic.bot?'below':'inside'} the cloud, Tenkan ${ic.ten>ic.kij?'above':'below'} Kijun`,'1h');
+  const r=rsi(c);T('rsi',r>55&&r<75?1:r<45&&r>25?-1:0,r.toFixed(1)+(r>=75?' · overbought':r<=25?' · oversold':''));
+  const md=macdFull(c);T('macd',md.m>md.s?1:md.m<md.s?-1:0,`MACD ${md.m>md.s?'above':'below'} signal, ${md.m>0?'above':'below'} zero`);
+  const vd=(d.price-d.vwap)/d.vwap*100;T('vwap',vd>0.05?1:vd<-0.05?-1:0,`Price ${vd>=0?'above':'below'} VWAP ${fp(d.vwap)} (${pct(vd)})`,'5m');
+  const ax=adx(h,l,c);T('adx',ax.adx>=20?Math.sign(ax.pdi-ax.mdi):0,`ADX ${ax.adx.toFixed(0)}${ax.adx<20?' · weak trend':''}, +DI ${ax.pdi.toFixed(0)} / −DI ${ax.mdi.toFixed(0)}`);
+  const bo=boll(c);T('bb',(p>bo.up||p<bo.lo)&&bo.width<bo.avgW?0:p>bo.mid?1:p<bo.mid?-1:0,p>bo.up?'Above upper band':p<bo.lo?'Below lower band':`${p>bo.mid?'Above':'Below'} middle band${bo.width<bo.avgW*0.7?' · squeeze':''}`);
+  const sr=stochRsi(c);T('stochrsi',sr.k>sr.d&&sr.k<80?1:sr.k<sr.d&&sr.k>20?-1:0,`K ${sr.k.toFixed(0)} / D ${sr.d.toFixed(0)}`);
+  const e9=emaArr(c,9)[i],e21=emaArr(c,21)[i],e50=emaArr(c,50)[i],e200=emaArr(c,200)[i];
+  T('ema',e9>e21&&e21>e50&&p>e200?1:e9<e21&&e21<e50&&p<e200?-1:0,`${e9>e21&&e21>e50?'9>21>50 stacked up':e9<e21&&e21<e50?'9<21<50 stacked down':'Not stacked'}, price ${p>e200?'above':'below'} EMA200`);
+  const vp=volumeProfile(h,l,c,v);T('vp',p>vp.vah?1:p<vp.val?-1:Math.abs(p-vp.poc)<(at[i]||0)*0.1?0:Math.sign(p-vp.poc),`${p>vp.vah?'Above value area':p<vp.val?'Below value area':'Inside value area'}, POC ${fp(vp.poc)} (24h)`);
+  const aChg=(at[i]-at[i-10])/at[i-10]*100,mv=Math.sign(c[i]-c[i-3]);T('atr',aChg>5?mv:0,`${fp(at[i])} · ${aChg>5?'expanding '+pct(aChg)+', move has energy':'flat or contracting'}`);
+  const ps=psar(h,l);T('psar',ps.up?1:-1,`SAR ${fp(ps.sar)} ${ps.up?'below':'above'} price`);
+  const cc=cci(h,l,c);T('cci',cc.now>50&&cc.now<250&&cc.now>=cc.prev?1:cc.now<-50&&cc.now>-250&&cc.now<=cc.prev?-1:0,`${cc.now.toFixed(0)} ${cc.now>=cc.prev?'rising':'falling'}`);
+  const wr=willr(h,l,c);T('wr',wr>-50&&wr<-20?1:wr<-50&&wr>-80?-1:0,`${wr.toFixed(0)}${wr>=-20?' · overbought':wr<=-80?' · oversold':''}`);
+  const km=emaArr(c,20)[i],ka=atr(h,l,c,10);T('keltner',p>km+0.1*ka?1:p<km-0.1*ka?-1:0,p>km+2*ka?'Above upper channel':p<km-2*ka?'Below lower channel':`${p>=km?'Above':'Below'} middle line ${fp(km)}`);
+  const dh=Math.max(...h.slice(n-21,n-1)),dl=Math.min(...l.slice(n-21,n-1)),dp=(p-dl)/((dh-dl)||1e-12);T('donchian',p>=dh||dp>0.75?1:p<=dl||dp<0.25?-1:0,p>=dh?'Breakout above 20-bar high':p<=dl?'Breakdown below 20-bar low':`At ${(dp*100).toFixed(0)}% of the channel`);
+  const hm=hmaArr(c,21);T('hma',p>hm[i]&&hm[i]>hm[i-1]?1:p<hm[i]&&hm[i]<hm[i-1]?-1:0,`HMA 21 ${fp(hm[i])} ${hm[i]>hm[i-1]?'rising':'falling'}, price ${p>hm[i]?'above':'below'}`);
+  const av=avg(k15.v.slice(n-22,n-2)),vr=k15.v[n-2]/(av||1),bd=c[n-2]-k15.o[n-2];T('avgvol',vr>=1.2?Math.sign(bd):0,`Last candle ${vr.toFixed(1)}× its 20-bar average, ${bd>=0?'green':'red'}`);
+  const day0=Math.floor(Date.now()/864e5)*864e5,idx=k1.t.map((t,j)=>t>=day0-864e5&&t<day0?j:-1).filter(j=>j>=0);
+  if(idx.length>=20){const PH=Math.max(...idx.map(j=>k1.h[j])),PL=Math.min(...idx.map(j=>k1.l[j])),PC=k1.c[idx[idx.length-1]],P=(PH+PL+PC)/3,R1=2*P-PL,S1=2*P-PH;
+    T('pivots',p>P&&!(p<R1&&R1-p<d.atr*0.5)?1:p<P&&!(p>S1&&p-S1<d.atr*0.5)?-1:0,`P ${fp(P)} · R1 ${fp(R1)} · S1 ${fp(S1)}`,'1D')}else T('pivots',0,'Not enough data for yesterday','1D');
+  let ob=0;const obs=[0];for(let j=1;j<n;j++){ob+=c[j]>c[j-1]?v[j]:c[j]<c[j-1]?-v[j]:0;obs.push(ob)}const obvS=(obs[i]-obs[n-21])/(sum(v.slice(n-20))||1);
+  T('obv',obvS>0.05?1:obvS<-0.05?-1:0,`${obvS>0.05?'Rising, accumulation':obvS<-0.05?'Falling, distribution':'Flat'} over 20 bars`);
+  const ut=utBot(c,atrArr(h,l,c,10),1);T('utbot',p>ut?1:-1,`Price ${p>ut?'above':'below'} trailing stop ${fp(ut)} (key 1, ATR 10)`);
+  const A=alphaTrend(h,l,c,v);T('alpha',A[i]>A[i-2]?1:A[i]<A[i-2]?-1:0,`AlphaTrend ${fp(A[i])} ${A[i]>A[i-2]?'rising':A[i]<A[i-2]?'falling':'flat'}`);
+  const ht=halfTrend(h,l,c);T('half',ht,ht?`${ht>0?'Up':'Down'} trend (amplitude 2)`:'No trend yet');
+  const q1=qqeLine(c,6,5,3),q2=qqeLine(c,6,5,1.61),dev=q1.fl.map(x=>x-50),bas=avg(dev.slice(n-50)),sd=0.35*stdevAt(dev,50,i),a1=q1.R[i]-50,a2=q2.R[i]-50;
+  T('qqe',a2>3&&a1>bas+sd?1:a2<-3&&a1<bas-sd?-1:0,a2>3&&a1>bas+sd?'Blue bar: buyers in control':a2<-3&&a1<bas-sd?'Red bar: sellers in control':'Grey bar: no clear side');
+  const wt=waveTrend(h,l,c),w1=wt.wt1[i],w2=wt.wt2[i];T('wave',w1>w2&&w1<60?1:w1<w2&&w1>-60?-1:0,`WT1 ${w1.toFixed(0)} ${w1>w2?'above':'below'} WT2 ${w2.toFixed(0)}${Math.abs(w1)>=60?(w1>0?' · overbought':' · oversold'):''}`);
+  const sh=hmaArr(h,60),sl=hmaArr(l,60),sb=hmaArr(c,60);let hlv=0;for(let j=0;j<n;j++){if(!isFinite(sh[j]))continue;hlv=c[j]>sh[j]?1:c[j]<sl[j]?-1:hlv}
+  T('ssl',hlv>0&&p>sb[i]?1:hlv<0&&p<sb[i]?-1:0,`SSL ${hlv>0?'up':hlv<0?'down':'flat'}, price ${p>sb[i]?'above':'below'} baseline HMA 60`);
+  const bq=sum(k15.tb.slice(n-8)),tq=sum(k15.v.slice(n-8)),bp=bq/(tq||1)*100;T('pressure',bp>55?1:bp<45?-1:0,`${bp.toFixed(0)}% buy / ${(100-bp).toFixed(0)}% sell volume over 2h`);
+  const tv=tvRatings(h,l,c,v),lab=x=>x>0.5?'Strong buy':x>0.1?'Buy':x<-0.5?'Strong sell':x<-0.1?'Sell':'Neutral';
+  T('tvr',tv.rating>0.1?1:tv.rating<-0.1?-1:0,`${lab(tv.rating)} (${tv.rating.toFixed(2)}) · MAs ${lab(tv.ma)}, oscillators ${lab(tv.osc)}`);
+  const lz=lorentzian(h,l,c);T('lorentz',lz.pred>0?1:lz.pred<0?-1:0,`${lz.pred>0?'Predicts up':lz.pred<0?'Predicts down':'No edge'} (${lz.pred>0?'+':''}${lz.pred} from ${lz.k} nearest past setups)`);
+  return IND_LIST.map(([id,name,list],k)=>{const s=INDSTAT[id]||{n:0,wr:null,w:1};return Object.assign({id,name,list,order:k,n:s.n,wr:s.wr,w:s.w},V[id])})
+    .sort((a,b)=>((b.n>=5?b.wr:50)-(a.n>=5?a.wr:50))||a.order-b.order);
 }
 
 /* ---------- analysis ---------- */
@@ -430,7 +486,7 @@ async function analyze(sym,tk,ctx){
   const q=p=>getJSON(SPOT+p);
   const [r5,r15,r1h,r4h,ob,ag]=await Promise.all([
     q(`/api/v3/klines?symbol=${sym}&interval=5m&limit=120`),
-    q(`/api/v3/klines?symbol=${sym}&interval=15m&limit=120`),
+    q(`/api/v3/klines?symbol=${sym}&interval=15m&limit=250`),
     q(`/api/v3/klines?symbol=${sym}&interval=1h&limit=250`),
     q(`/api/v3/klines?symbol=${sym}&interval=4h&limit=100`),
     q(`/api/v3/depth?symbol=${sym}&limit=100`).catch(()=>null),
@@ -553,7 +609,8 @@ async function analyze(sym,tk,ctx){
   const s=d.dir==='LONG'?1:-1;
   d.agree=C.filter(c=>Math.sign(c.b)===s&&Math.abs(c.b)>=0.25).length;
   d.against=C.filter(c=>Math.sign(c.b)===-s&&Math.abs(c.b)>=0.25).length;
-  d.ind=indicators20(k5,k15,k1,d);d.indAgree=d.ind.filter(x=>x.vote===s).length;d.indAgainst=d.ind.filter(x=>x.vote===-s).length;
+  d.ind=indicators29(k5,k15,k1,d);d.indTotal=d.ind.length;d.indAgree=d.ind.filter(x=>x.vote===s).length;d.indAgainst=d.ind.filter(x=>x.vote===-s).length;
+  {const W=sum(d.ind.map(x=>x.w)),A=sum(d.ind.filter(x=>x.vote===s).map(x=>x.w));d.indPct=Math.round(W?A/W*100:0)}
 
   // levels
   const lo=Math.min(...k5.l.slice(-12)),hi=Math.max(...k5.h.slice(-12)),a=d.atr;let sl;
@@ -576,8 +633,8 @@ async function analyze(sym,tk,ctx){
   gate('Not overextended',s>0?d.chg<=30:d.chg>=-30,`24h change ${pct(d.chg)} (limit ±30% in trade direction)`);
   gate('Enough liquidity',Math.min(bidD,askD)>=30000,`Depth within 1%: bids ${fu(bidD)}, asks ${fu(askD)} (min $30K each)`);
   gate('Shortable',s>0||hasFut,s>0?'Long trade, not needed':hasFut?'Coin has Binance futures, short is possible':'Spot-only coin, shorting needs futures');
-  gate('Indicators confirm',d.indAgree>=S.minInd,`${d.indAgree} of 20 indicators agree with ${d.dir.toLowerCase()}, ${d.indAgainst} against (needs ${S.minInd})`);
-  d.gates=G;const WL={'Volatility in range':d.atrPct<0.12?'Too quiet to scalp':'Volatility too high','RSI not stretched':s>0?'RSI overbought':'RSI oversold','Tight spread':'Wide spread','Volume or whales confirm':'No volume/whale confirmation','Room to TP1':s>0?'Resistance before TP1':'Support before TP1','Not overextended':'Overextended 24h','Enough liquidity':'Thin order book','Indicators confirm':`Only ${d.indAgree}/20 indicators agree`,'Shortable':'Spot only, can\'t short'};d.warn=G.filter(g=>!g.pass).map(g=>WL[g.label]||g.label);
+  gate('Indicators confirm',d.indPct>=S.indPct,`${d.indAgree} of ${d.indTotal} indicators agree with ${d.dir.toLowerCase()} (${d.indAgainst} against) · weighted by win %: ${d.indPct}% (needs ${S.indPct}%)`);
+  d.gates=G;const WL={'Volatility in range':d.atrPct<0.12?'Too quiet to scalp':'Volatility too high','RSI not stretched':s>0?'RSI overbought':'RSI oversold','Tight spread':'Wide spread','Volume or whales confirm':'No volume/whale confirmation','Room to TP1':s>0?'Resistance before TP1':'Support before TP1','Not overextended':'Overextended 24h','Enough liquidity':'Thin order book','Indicators confirm':`Indicators only ${d.indPct}% agree`,'Shortable':'Spot only, can\'t short'};d.warn=G.filter(g=>!g.pass).map(g=>WL[g.label]||g.label);
 
   d.tags=[];
   if(d.trending)d.tags.push(['Trending','hot']);
@@ -597,7 +654,7 @@ let STATE={rows:[],fng:null,btc:null,last:0,scanning:false,readySet:new Set(),fi
 let nextAt=0;
 
 async function scan(){
-  if(STATE.scanning)return;STATE.scanning=true;const scanStart=Date.now();$('#btnScan').disabled=true;
+  if(STATE.scanning)return;STATE.scanning=true;const scanStart=Date.now();try{refreshIndStats()}catch(e){}$('#btnScan').disabled=true;
   setStatus('Connecting to Binance…');setProg(2);
   try{
     if(!SPOT)SPOT=await pickHost();
@@ -736,7 +793,7 @@ function cardHTML(r,watch){
     <div class="chead"><span class="sym">${r.base}<small>${fp(r.price)}</small></span>
       <span><span class="pill ${r.dir}">${r.dir}</span> <span class="pill ${r.signal} ${r.dir}">${r.signal}</span></span></div>
     <div class="scorebar"><span>${r.score}</span><span class="meter"><i style="width:${r.score}%;background:${meterColor(r)}"></i></span><span class="mut">/100</span></div>
-    <div class="sub"><b style="color:var(--fg)">${r.agree}/${r.checks.length}</b> checks agree · <b style="color:var(--fg)">${r.indAgree}/20</b> indicators · gates ${r.gates.filter(g=>g.pass).length}/${r.gates.length}</div>
+    <div class="sub"><b style="color:var(--fg)">${r.agree}/${r.checks.length}</b> checks agree · <b style="color:var(--fg)">${r.indAgree}/${r.indTotal}</b> indicators (${r.indPct}% weighted) · gates ${r.gates.filter(g=>g.pass).length}/${r.gates.length}</div>
     ${levelsHTML(r)}
     ${cardOrderHTML(r)}
     <ul class="reasons">${reasonsFor(r).map(c=>`<li>${c.label}: ${c.text}</li>`).join('')}</ul>
@@ -765,7 +822,7 @@ const COLS=[
   ['score','Signal',r=>({READY:2,WATCH:1,WAIT:0}[r.signal])*1000+r.score,r=>`<span class="pill ${r.signal} ${r.dir}">${r.signal==='WAIT'?'WAIT':r.signal+' '+r.dir}</span>`],
   ['long','Long',r=>r.long,r=>`${r.long}<span class="mini"><i style="width:${r.long}%;background:var(--long)"></i></span>`],
   ['short','Short',r=>r.short,r=>`${r.short}<span class="mini"><i style="width:${r.short}%;background:var(--short)"></i></span>`],
-  ['indAgree','Ind 20',r=>r.indAgree,r=>`<span class="${r.indAgree>=S.minInd?(r.dir==='LONG'?'up':'dn'):'mut'}">${r.indAgree}/20</span>`],
+  ['indPct','Indicators',r=>r.indPct,r=>`<span class="${r.indPct>=S.indPct?(r.dir==='LONG'?'up':'dn'):'mut'}">${r.indAgree}/${r.indTotal}</span> <span class="mut">${r.indPct}%</span>`],
   ['rsi5','RSI 5m',r=>r.rsi5,r=>`<span class="${r.rsi5>70?'dn':r.rsi5<30?'up':''}">${r.rsi5.toFixed(0)}</span>`],
   ['volX','Vol ×',r=>r.volX,r=>`<span class="${r.volX>=1.8?'up':''}">${r.volX.toFixed(1)}×</span>`],
   ['whaleNet','Whale net',r=>r.whaleNet,r=>r.wn?`<span class="${cls(r.whaleNet)}">${r.whaleNet>=0?'+':'−'}${fu(Math.abs(r.whaleNet))}</span> <span class="mut">${r.wn}</span>`:'<span class="mut">—</span>'],
@@ -794,10 +851,10 @@ function openDrawer(sym){
       <div class="sub">Stop distance ${r.riskPct.toFixed(2)}% (${(r.riskPct/r.atrPct).toFixed(1)}× ATR). Take part profit at TP1 and move the stop to entry.</div></div>
     ${ticketHTML(r)}
     ${r.warn.length||r.tags.length?`<div class="tags">${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>`:''}
-    <div class="box"><h3>20-indicator confirmation · ${r.indAgree} agree with ${r.dir.toLowerCase()}</h3>
-      <div class="scorebar"><span class="up">${r.ind.filter(x=>x.vote>0).length} buy</span><span class="meter" style="display:flex"><i style="width:${r.ind.filter(x=>x.vote>0).length*5}%;background:var(--long);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote===0).length*5}%;background:var(--dim);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote<0).length*5}%;background:var(--short);border-radius:0"></i></span><span class="dn">${r.ind.filter(x=>x.vote<0).length} sell</span></div>
-      <div class="checks">${r.ind.map((x,i)=>`<div class="ck"><span class="t"><span class="mut">${i+1}.</span> ${x.name} <span class="mut" style="font-size:12px">${x.tf}</span></span><span style="grid-row:1/3;grid-column:2;text-align:right"><span class="pill ${x.vote>0?'LONG':x.vote<0?'SHORT':'WAIT'}">${x.vote>0?'BUY':x.vote<0?'SELL':'NEUTRAL'}</span></span><span class="d">${x.val}</span></div>`).join('')}</div>
-      <div class="sub">At least ${S.minInd} of 20 must agree with the trade direction for READY. Change this in Settings.</div></div>
+    <div class="box"><h3>${r.indTotal}-indicator confirmation · ${r.indAgree} agree with ${r.dir.toLowerCase()} · ${r.indPct}% weighted</h3>
+      <div class="scorebar"><span class="up">${r.ind.filter(x=>x.vote>0).length} buy</span><span class="meter" style="display:flex"><i style="width:${r.ind.filter(x=>x.vote>0).length/r.indTotal*100}%;background:var(--long);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote===0).length/r.indTotal*100}%;background:var(--dim);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote<0).length/r.indTotal*100}%;background:var(--short);border-radius:0"></i></span><span class="dn">${r.ind.filter(x=>x.vote<0).length} sell</span></div>
+      <div class="checks">${r.ind.map((x,i)=>`<div class="ck"><span class="t"><span class="mut">${i+1}.</span> ${x.name} <span class="mut" style="font-size:12px">${x.tf}</span> <span class="mut" style="font-size:12px">· ${x.n>=5?`win ${x.wr.toFixed(0)}% (${x.n})`:`win % after 5 trades (${x.n})`}${x.w!==1?` · weight ${x.w.toFixed(2)}×`:''}</span></span><span style="grid-row:1/3;grid-column:2;text-align:right"><span class="pill ${x.vote>0?'LONG':x.vote<0?'SHORT':'WAIT'}">${x.vote>0?'BUY':x.vote<0?'SELL':'NEUTRAL'}</span></span><span class="d">${x.val}</span></div>`).join('')}</div>
+      <div class="sub">Sorted by win % in your trade history: how often trades won when that indicator agreed. After 10 trades an indicator counts up to 2× (high win %) or as little as 0.25× (low win %). READY needs ${S.indPct}% weighted agreement; change it in Settings.</div></div>
     <div class="box"><h3>Safety gates · ${r.gates.filter(g=>g.pass).length} of ${r.gates.length} passed</h3><div class="checks">${r.gates.map(g=>`<div class="ck"><span class="t"><span class="${g.pass?'up':'dn'}">${g.pass?'✓':'✗'}</span> ${g.label}</span><span></span><span class="d">${g.text}</span></div>`).join('')}</div>
       <div class="sub">All gates must pass before a coin shows as READY.</div></div>
     <div class="box"><h3>All ${r.checks.length} checks · ${r.agree} agree with ${r.dir.toLowerCase()}, ${r.against} against</h3><div class="checks">${groups.map(g=>`<div class="grp">${g}</div>`+r.checks.filter(c=>c.g===g).map(c=>{
@@ -834,7 +891,7 @@ const unreal=p=>sgn(p)*(p.last-p.entry)*p.left;
 const equity=()=>D.bal+sum(D.open.map(unreal));
 
 /* ---------- Trade Agent link: entry snapshots, blocks, commands ---------- */
-function snap(r){const n=new Date();return{score:r.score,ind:r.indAgree,agree:r.agree,against:r.against,rsi:+r.rsi5.toFixed(1),atr:+r.atrPct.toFixed(3),volX:+r.volX.toFixed(2),
+function snap(r){const n=new Date();return{score:r.score,ind:r.indAgree,indPct:r.indPct,iv:Object.fromEntries((r.ind||[]).map(x=>[x.id,x.vote])),agree:r.agree,against:r.against,rsi:+r.rsi5.toFixed(1),atr:+r.atrPct.toFixed(3),volX:+r.volX.toFixed(2),
   whale:r.wn?Math.sign(r.whaleNet):0,fund:r.funding,btc:STATE.btcBias==null?null:+STATE.btcBias.toFixed(2),rank:r.rank,chg:+r.chg.toFixed(2),tags:r.tags.map(t=>t[0]),hour:n.getHours(),dow:n.getDay()}}
 function agentBlocked(r){if((S.block||[]).includes(r.base))return'Blocked by Trade Agent';if((S.badHours||[]).includes(new Date().getHours()))return'Paused hour (Trade Agent)';
   if(S.btcFilter&&r.sym!=='BTCUSDT'&&STATE.btcBias!=null&&((r.dir==='LONG'&&STATE.btcBias<-0.3)||(r.dir==='SHORT'&&STATE.btcBias>0.3)))return'Against BTC trend (agent rule)';
@@ -1121,7 +1178,7 @@ function signalNow(p){const r=STATE.rows.find(x=>x.sym===p.sym);if(!r)return'<sp
   return `<span class="pill ${r.signal} ${r.dir}">${r.signal==='WAIT'?'WAIT':r.signal+' '+r.dir}</span>`}
 
 /* ---------- wiring ---------- */
-const ids=['minVol','deep','refresh','account','risk','ready','minInd','lev','spotFee'];
+const ids=['minVol','deep','refresh','account','risk','ready','indPct','lev','spotFee'];
 function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
 ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk','lev','spotFee'].includes(k)&&STATE.rows.length){render();if(STATE.open&&!$('#drawer').hidden)openDrawer(STATE.open)}}}));
 $('#s_futOnly').addEventListener('change',e=>{S.futOnly=e.target.checked;save()});
