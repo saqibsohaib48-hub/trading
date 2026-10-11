@@ -150,7 +150,6 @@ td button{padding:4px 10px;font-size:12px}
     <label class="f">Spot fee per side (%)<input id="s_spotFee" type="number" min="0" max="0.5" step="0.01"></label>
     <label class="f">Ready score threshold<input id="s_ready" type="number" min="55" max="90" step="1"></label>
     <label class="f">Min indicators agreeing (of 20)<input id="s_minInd" type="number" min="5" max="20" step="1"></label>
-    <label class="f">Close demo trades when signal…<select id="s_exitMode"><option value="strict">leaves READY (watch, wait or gone)</option><option value="fade">reverses or drops to WAIT (holds through WATCH)</option><option value="off">never (only SL / TP / time)</option></select></label>
     <label class="f">Trade direction<select id="s_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
     <label class="f chk"><input id="s_futOnly" type="checkbox"> Only coins with futures</label>
     <label class="f chk"><input id="s_sound" type="checkbox"> Sound on new signal</label>
@@ -167,7 +166,6 @@ td button{padding:4px 10px;font-size:12px}
       <label class="f">Starting balance ($)<input id="d_start" type="number" min="100" step="100"></label>
       <label class="f">Max open trades<input id="d_maxOpen" type="number" min="1" max="20" step="1"></label>
       <label class="f">Fee per side (%)<input id="d_fee" type="number" min="0" max="0.5" step="0.01"></label>
-      <label class="f">Close trade after (min)<input id="d_maxHold" type="number" min="5" max="1440" step="5"></label>
       <label class="f chk"><input id="d_auto" type="checkbox"> Auto-take READY signals</label>
       <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap"><button id="d_reset" type="button">Reset demo</button><button type="button" class="exportBtn">Export trades</button></div>
     </section>
@@ -178,7 +176,7 @@ td button{padding:4px 10px;font-size:12px}
     <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Now</th><th>Stop</th><th>Next target</th><th>Size</th><th>P&amp;L</th><th>Signal now</th><th>Open for</th><th></th></tr></thead><tbody id="dopen"></tbody></table></div>
     <h2>Trade history <small id="histNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Fees</th><th>P&amp;L</th><th>R</th><th>Held</th></tr></thead><tbody id="dhist"></tbody></table></div>
-    <p class="disclaimer">How the demo works: when a scan marks a coin READY, the demo opens a trade at the scan price, sized so the stop loss costs your risk % (set in Settings) of the demo balance. Prices are checked every 5 seconds. At TP1 it closes 50% and moves the stop to entry. At TP2 it closes another 30% and moves the stop to TP1. At TP3 it closes the rest. Trades still open after the time limit close at market. Fees are charged on every fill. Max 10× of balance per trade, one trade per coin, and a 15-minute pause on a coin after it closes. The demo only runs while this page is open, and it is saved in this browser. Real fills can be worse than these results because of slippage and very fast moves.</p>
+    <p class="disclaimer">How the demo works: when a scan marks a coin READY, the demo opens a trade at the scan price, sized so the stop loss costs your risk % (set in Settings) of the demo balance. Prices are checked every 5 seconds. At TP1 it closes 50% and moves the stop to entry. At TP2 it closes another 30% and moves the stop to TP1. At TP3 it closes the rest. A trade only ever closes at a take-profit or the stop-loss (or when you press Close); there is no time limit and no close on signal changes. Fees are charged on every fill. Max 10× of balance per trade, one trade per coin, and a 15-minute pause on a coin after it closes. The demo only runs while this page is open, and it is saved in this browser. Real fills can be worse than these results because of slippage and very fast moves.</p>
   </div>
 
   <div id="viewFut" hidden>
@@ -191,7 +189,6 @@ td button{padding:4px 10px;font-size:12px}
       <label class="f">Taker fee (%)<input id="f_taker" type="number" min="0" max="0.2" step="0.001"></label>
       <label class="f">Extra slippage (%)<input id="f_slip" type="number" min="0" max="0.5" step="0.01"></label>
       <label class="f">Maintenance margin, alts (%)<input id="f_mmr" type="number" min="0.1" max="10" step="0.1"></label>
-      <label class="f">Close trade after (min)<input id="f_maxHold" type="number" min="5" max="1440" step="5"></label>
       <label class="f chk"><input id="f_bnb" type="checkbox"> Pay fees in BNB (−10%)</label>
       <label class="f chk"><input id="f_auto" type="checkbox"> Auto-take READY signals</label>
       <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap"><button id="f_reset" type="button">Reset futures demo</button><button type="button" class="exportBtn">Export trades</button></div>
@@ -205,7 +202,7 @@ td button{padding:4px 10px;font-size:12px}
     <p class="sub" id="fskip"></p>
     <h2>Trade history <small id="fhistNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Gross</th><th>Fees</th><th>Funding</th><th>Net</th><th>ROE</th><th>R</th><th>Held</th></tr></thead><tbody id="fhist"></tbody></table></div>
-    <p class="disclaimer">How the futures demo works, like a Binance USDⓈ-M isolated-margin position: entries are market orders filled at the live futures ask (long) or bid (short) plus your extra slippage, and pay the taker fee. The stop keeps the signal's distance in %, and size is set so that hitting the stop, including fees and slippage, costs your risk % of the balance. Take-profits are limit orders filled at the target price with the maker fee; stops are stop-market orders resting on the exchange, so they fill at the stop price with double slippage and the taker fee; the time limit and manual closes are market orders at the live bid/ask with slippage and the taker fee. Funding is charged or paid at each real funding time using the live rate and mark price (longs pay when the rate is positive). Liquidation uses the mark price and an estimated maintenance margin; if it is hit, the position's whole margin is lost. A signal is skipped if its stop sits beyond the liquidation price or there isn't enough free margin. Maintenance margin rates and maximum leverage vary by coin and position size on Binance, so check your own limits before trading live.</p>
+    <p class="disclaimer">How the futures demo works, like a Binance USDⓈ-M isolated-margin position: entries are market orders filled at the live futures ask (long) or bid (short) plus your extra slippage, and pay the taker fee. The stop keeps the signal's distance in %, and size is set so that hitting the stop, including fees and slippage, costs your risk % of the balance. Take-profits are limit orders filled at the target price with the maker fee; stops are stop-market orders resting on the exchange, so they fill at the stop price with double slippage and the taker fee; a manual Close is a market order at the live bid/ask with slippage and the taker fee. Trades only close at a take-profit or the stop-loss, never on a timer or a signal change. Funding is charged or paid at each real funding time using the live rate and mark price (longs pay when the rate is positive). Liquidation uses the mark price and an estimated maintenance margin; if it is hit, the position's whole margin is lost. A signal is skipped if its stop sits beyond the liquidation price or there isn't enough free margin. Maintenance margin rates and maximum leverage vary by coin and position size on Binance, so check your own limits before trading live.</p>
   </div>
 
   <div id="viewScan">
@@ -256,15 +253,15 @@ td button{padding:4px 10px;font-size:12px}
 <div class="backdrop" id="backdrop" hidden></div>
 <aside class="drawer" id="drawer" hidden aria-label="Coin details"></aside>
 
-<script src="agent-core.js?v=5"></script>
+<script src="agent-core.js?v=6"></script>
 <script>
 'use strict';
 /* ---------- settings ---------- */
-const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,lev:10,spotFee:0.1,exitMode:'strict',side:'BOTH',futOnly:false,sound:false,auto:true};
+const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,lev:10,spotFee:0.1,exitMode:'off',side:'BOTH',futOnly:false,sound:false,auto:true};
 let S=Object.assign({},DEF);
 try{Object.assign(S,JSON.parse(localStorage.getItem('scalpRadarV1')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('scalpRadarV1',JSON.stringify(S))}catch(e){}}
-if(S.exitV!==2){S.exitMode='strict';S.exitV=2;save()}
+S.exitMode='off';S.exitV=3;// exits: take-profit or stop-loss only
 
 const $=s=>document.querySelector(s);
 const clamp=(x,a=-1,b=1)=>Math.max(a,Math.min(b,isFinite(x)?x:0));
@@ -631,7 +628,7 @@ async function scan(){
     if(fresh.length&&S.sound&&STATE.readySet.size+1)beep();
     STATE.readySet=ready;
     STATE.scanStart=scanStart;STATE.failed=failed;
-    const closedN=await signalExits();
+    const closedN=0;
     render();
     demoAfterScan();renderDemo();futAfterScan();renderFut();
     runAutopilot();
@@ -872,7 +869,6 @@ function step(p,price){
   if(p.hit<1&&s*(price-p.tp[0])>=0){p.hit=1;fill(p,p.qty*0.5,p.tp[0],'TP1');p.sl=p.entry}
   if(p.left>0&&p.hit<2&&s*(price-p.tp[1])>=0){p.hit=2;fill(p,p.qty*0.3,p.tp[1],'TP2');p.sl=p.tp[0]}
   if(p.left>0&&p.hit<3&&s*(price-p.tp[2])>=0){p.hit=3;fill(p,p.left,p.tp[2],'TP3');return}
-  if(p.left>0&&Date.now()-p.openAt>D.cfg.maxHold*60e3)fill(p,p.left,price,'Time limit');
 }
 let pollOk=false;
 async function pollPrices(){
@@ -948,8 +944,8 @@ function drawCurveFor(cvs,view,pts,base){
   g.lineTo(x(pts.length-1),y(lo));g.lineTo(x(0),y(lo));g.closePath();g.globalAlpha=.12;g.fillStyle=c;g.fill();g.globalAlpha=1;
   g.beginPath();g.arc(x(pts.length-1),y(pts[pts.length-1]),4,0,Math.PI*2);g.fillStyle=c;g.fill();
 }
-function loadDemoForm(){$('#d_start').value=D.cfg.start;$('#d_maxOpen').value=D.cfg.maxOpen;$('#d_fee').value=D.cfg.fee;$('#d_maxHold').value=D.cfg.maxHold;$('#d_auto').checked=D.cfg.auto}
-[['start',100],['maxOpen',1],['fee',0],['maxHold',5]].forEach(([k,min])=>$('#d_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>=min){D.cfg[k]=k==='maxOpen'?Math.round(v):v;dsave();renderDemo()}}));
+function loadDemoForm(){$('#d_start').value=D.cfg.start;$('#d_maxOpen').value=D.cfg.maxOpen;$('#d_fee').value=D.cfg.fee;$('#d_auto').checked=D.cfg.auto}
+[['start',100],['maxOpen',1],['fee',0]].forEach(([k,min])=>$('#d_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>=min){D.cfg[k]=k==='maxOpen'?Math.round(v):v;dsave();renderDemo()}}));
 $('#d_auto').addEventListener('change',e=>{D.cfg.auto=e.target.checked;dsave();if(D.cfg.auto)demoAfterScan();renderDemo()});
 let resetArm=0;
 $('#d_reset').onclick=()=>{const b=$('#d_reset');
@@ -1042,7 +1038,6 @@ function futStep(p){
   if(p.hit<1&&s*(exitPx-p.tp[0])>=0){p.hit=1;futFill(p,p.qty*0.5,p.tp[0],'TP1',true);p.sl=p.entry}
   if(p.left>0&&p.hit<2&&s*(exitPx-p.tp[1])>=0){p.hit=2;futFill(p,p.qty*0.3,p.tp[1],'TP2',true);p.sl=p.tp[0]}
   if(p.left>0&&p.hit<3&&s*(exitPx-p.tp[2])>=0){p.hit=3;futFill(p,p.left,p.tp[2],'TP3',true);return}
-  if(p.left>0&&Date.now()-p.openAt>c.maxHold*60e3)futFill(p,p.left,exitPx*(1-s*c.slip/100),'Time limit',false,mid);
 }
 async function futPoll(){
   if(!F.open.length){renderFut();return}
@@ -1103,10 +1098,10 @@ function renderFut(){
     :`<tr><td colspan="13" class="mut" style="text-align:left">Closed futures trades will appear here with gross P&amp;L, fees, funding and net result.</td></tr>`;
   drawCurveFor('#eqF','#viewFut',F.curve.map(p=>p.b).concat([eq]),F.base);
 }
-function loadFutForm(){['start','lev','risk','maxOpen','maker','taker','slip','mmr','maxHold'].forEach(k=>$('#f_'+k).value=F.cfg[k]);$('#f_bnb').checked=F.cfg.bnb;$('#f_auto').checked=F.cfg.auto;updLevNote()}
+function loadFutForm(){['start','lev','risk','maxOpen','maker','taker','slip','mmr'].forEach(k=>$('#f_'+k).value=F.cfg[k]);$('#f_bnb').checked=F.cfg.bnb;$('#f_auto').checked=F.cfg.auto;updLevNote()}
 function updLevNote(){const c=F.cfg,mmr=c.mmr/100,lq=(1-(1-1/c.lev)/(1-mmr))*100;
   $('#f_levNote').textContent=`At ${c.lev}× a ${lq.toFixed(1)}% move against you liquidates the position (alts). Stops wider than that are skipped. Your loss at the stop stays ${c.risk}% of the balance at any leverage; higher leverage only locks less margin and moves liquidation closer.`}
-[['start',100],['lev',1],['risk',0.1],['maxOpen',1],['maker',0],['taker',0],['slip',0],['mmr',0.1],['maxHold',5]].forEach(([k,min])=>$('#f_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);
+[['start',100],['lev',1],['risk',0.1],['maxOpen',1],['maker',0],['taker',0],['slip',0],['mmr',0.1]].forEach(([k,min])=>$('#f_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);
   if(isFinite(v)&&v>=min){F.cfg[k]=k==='maxOpen'||k==='lev'?Math.round(Math.min(v,k==='lev'?125:50)):v;fsave();updLevNote();renderFut()}}));
 $('#f_bnb').addEventListener('change',e=>{F.cfg.bnb=e.target.checked;fsave();renderFut()});
 $('#f_auto').addEventListener('change',e=>{F.cfg.auto=e.target.checked;fsave();if(F.cfg.auto)futAfterScan();renderFut()});
@@ -1122,41 +1117,15 @@ $('#fopen').addEventListener('click',async e=>{const b=e.target.closest('[data-f
 setInterval(futPoll,5000);
 
 /* ---------- close demo trades when the signal disappears ---------- */
-function signalLost(p){
-  if(!STATE.scanStart||p.openAt>=STATE.scanStart)return null;
-  const r=STATE.rows.find(x=>x.sym===p.sym);
-  if(!r)return S.exitMode==='strict'&&!(STATE.failed&&STATE.failed.has(p.sym))?'Dropped from scanner':null;
-  if(r.dir!==p.dir&&r.score>=55)return'Signal reversed';
-  if(S.exitMode==='strict')return r.signal==='READY'&&r.dir===p.dir?null:(r.signal==='WATCH'?'Signal moved to WATCH':'Signal moved to WAIT');
-  if(r.signal==='WAIT')return'Signal faded';
-  return null;
-}
 function signalNow(p){const r=STATE.rows.find(x=>x.sym===p.sym);if(!r)return'<span class="mut">not scanned</span>';
   return `<span class="pill ${r.signal} ${r.dir}">${r.signal==='WAIT'?'WAIT':r.signal+' '+r.dir}</span>`}
-async function signalExits(){
-  if(S.exitMode==='off')return 0;let n=0;
-  const ds=D.open.filter(p=>signalLost(p));
-  if(ds.length){const px={};for(const p of ds){const r=STATE.rows.find(x=>x.sym===p.sym);if(r)px[p.sym]=r.price}
-    const miss=ds.filter(p=>!px[p.sym]).map(p=>p.sym);
-    if(miss.length){try{const j=await getJSON(SPOT+'/api/v3/ticker/price?symbols='+encodeURIComponent(JSON.stringify(miss)),8000);for(const x of j)px[x.symbol]=+x.price}catch(e){}}
-    for(const p of ds){const price=px[p.sym]||p.last;p.last=price;fill(p,p.left,price,signalLost(p));n++}}
-  const fl=F.open.filter(p=>signalLost(p));
-  if(fl.length){try{await futPrices()}catch(e){}
-    for(const p of fl){const why=signalLost(p),s=sgn(p),r=STATE.rows.find(x=>x.sym===p.sym);
-      let bid=FX.bid[p.sym],ask=FX.ask[p.sym];if(!bid||!ask){const m=FX.mark[p.sym]||p.mark||(r&&r.price);bid=ask=m}
-      if(!bid)continue;
-      futFill(p,p.left,(s>0?bid:ask)*(1-s*F.cfg.slip/100),why,false,(bid+ask)/2);n++}}
-  if(n){dsave();fsave()}
-  return n;
-}
 
 /* ---------- wiring ---------- */
 const ids=['minVol','deep','refresh','account','risk','ready','minInd','lev','spotFee'];
-function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_exitMode').value=S.exitMode;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
+function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
 ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk','lev','spotFee'].includes(k)&&STATE.rows.length){render();if(STATE.open&&!$('#drawer').hidden)openDrawer(STATE.open)}}}));
 $('#s_futOnly').addEventListener('change',e=>{S.futOnly=e.target.checked;save()});
 $('#s_side').addEventListener('change',e=>{S.side=e.target.value;save();scan()});
-$('#s_exitMode').addEventListener('change',e=>{S.exitMode=e.target.value;save()});
 $('#s_sound').addEventListener('change',e=>{S.sound=e.target.checked;save();if(S.sound)beep()});
 $('#btnSettings').onclick=()=>{const s=$('#settings');s.hidden=!s.hidden;$('#btnSettings').setAttribute('aria-expanded',String(!s.hidden))};
 $('#btnAuto').onclick=()=>{S.auto=!S.auto;save();loadForm();nextAt=Date.now()+S.refresh*60e3};
@@ -1188,7 +1157,7 @@ function apBadge(){const el=$('#apBadge');if(!el)return;if(!window.AgentCore){el
 const CMDKEY='scalpRadarAgentCmd';
 function applyAgentCmd(){let c=null;try{c=JSON.parse(localStorage.getItem(CMDKEY)||'null')}catch(e){}
   if(!c||!c.id||c.id===S.agentCmdId)return;
-  if(c.S)Object.assign(S,c.S);if(c.spot)Object.assign(D.cfg,c.spot);if(c.fut)Object.assign(F.cfg,c.fut);
+  if(c.S)Object.assign(S,c.S);S.exitMode='off';if(c.spot)Object.assign(D.cfg,c.spot);if(c.fut)Object.assign(F.cfg,c.fut);
   S.agentCmdId=c.id;save();dsave();fsave();loadForm();loadDemoForm();loadFutForm();if(STATE.rows.length)render();renderDemo();renderFut();
   setStatus(`Trade Agent applied: ${c.summary||'new settings'}`)}
 window.addEventListener('storage',e=>{if(e.key===CMDKEY)applyAgentCmd();if(e.key==='scalpRadarAgentMem')apBadge()});
