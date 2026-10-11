@@ -20,7 +20,7 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const DAY=864e5;
 
 /* ---------- settings view (same for both pages) ---------- */
-const DEFS={ready:70,minInd:12,side:'BOTH',exitMode:'strict',risk:1,block:[],badHours:[],btcFilter:false,minAtr:0};
+const DEFS={ready:70,minInd:12,side:'BOTH',exitMode:'off',risk:1,block:[],badHours:[],btcFilter:false,minAtr:0};
 function settingsView(S,D,F){const s=Object.assign({},DEFS,S||{});s.block=(s.block||[]).slice();s.badHours=(s.badHours||[]).slice();
   s.lev=F&&F.cfg?F.cfg.lev:10;s.futRisk=F&&F.cfg?F.cfg.risk:1;s.maxHold=F&&F.cfg?F.cfg.maxHold:60;return s}
 
@@ -61,7 +61,7 @@ const MISTAKES={
   quiet:{label:'Market too quiet: fees ate the move',guard:s=>s.minAtr>=0.2?`Guarded: min volatility ${s.minAtr}%`:null},
   wild:{label:'Market too wild: stop hit by noise',guard:()=>null},
   fast:{label:'Stopped out within 10 minutes (bad timing)',guard:()=>null},
-  time:{label:'Trade went nowhere and ran out of time',guard:s=>s.maxHold<=40?`Guarded: time limit ${s.maxHold} min`:null},
+  time:{label:'Trade went nowhere and ran out of time (old time-limit rule)',guard:()=>'Guarded: time limit removed, trades now run to TP or SL'},
   repeat:{label:'Re-entered a coin that just lost',guard:()=>null},
   fees:{label:'Right direction, but fees turned it into a loss',guard:()=>null},
   coin:{label:'Traded a coin that keeps losing',guard:(s,t)=>t&&s.block.includes(t.base)?`Guarded: ${t.base} is blocked`:null},
@@ -134,12 +134,7 @@ function findings(T,set,opts){
     act:{label:'Halve risk',cmd:{S:{risk:Math.max(0.25,+(set.risk/2).toFixed(2))},fut:{risk:Math.max(0.25,+(set.futRisk/2).toFixed(2))}},summary:`Risk per trade → ${Math.max(0.25,+(set.risk/2).toFixed(2))}% spot, ${Math.max(0.25,+(set.futRisk/2).toFixed(2))}% futures`,auto:true,safety:true}});
   const liq=T.filter(t=>t.why==='Liquidated');
   if(liq.length&&set.lev>2)add({id:'liq',key:'rule:lev',kind:'lev',sev:'bad',n:liq.length,title:`${liq.length} liquidation${liq.length>1?'s':''}`,body:`Liquidations lost ${money(-sum(liq.map(t=>t.net)))}. Lower leverage moves the liquidation price further from your stop.`,conf:'High',act:{label:`Leverage → ${Math.max(2,Math.floor(set.lev/2))}×`,cmd:{fut:{lev:Math.max(2,Math.floor(set.lev/2))}},summary:`Futures leverage → ${Math.max(2,Math.floor(set.lev/2))}×`,auto:true,safety:true}});
-  const sig=T.filter(t=>/Left|Signal|Dropped|No longer/.test(t.why)),tpsl=T.filter(t=>!/Left|Signal|Dropped|No longer|Manual|Time/.test(t.why));
-  if(sig.length>=8){const a=stats(sig),b=stats(tpsl);
-    if(set.exitMode==='strict'&&a.expR<-0.1&&b.expR>0&&tpsl.length>=8)add({id:'exit-fade',key:'rule:exitMode',kind:'exitMode',sev:'warn',n:a.n,title:'Closing on signal changes is cutting trades too early',body:`${a.n} trades closed because the signal changed: avg <b>${fr(a.expR)}</b>. Trades that ran to their stop or targets: avg <b>${fr(b.expR)}</b>. Holding through WATCH lets more trades reach their targets.`,conf:confOf(a.n),act:{label:'Hold through WATCH',cmd:{S:{exitMode:'fade'}},summary:'Close rule → only on reversal or WAIT',auto:true}});
-    if(set.exitMode!=='strict'&&a.expR>0.1&&b.expR<0)add({id:'exit-strict',key:'rule:exitMode',kind:'exitMode',sev:'warn',n:a.n,title:'Early exits on signal changes are helping',body:`Signal-change exits avg <b>${fr(a.expR)}</b> vs ${fr(b.expR)} for trades left to their stop/targets. Closing as soon as a coin leaves the Trade now list protects more profit.`,conf:confOf(a.n),act:{label:'Strict exits',cmd:{S:{exitMode:'strict'}},summary:'Close rule → leaves READY',auto:true}})}
-  const tl=T.filter(t=>t.why.includes('Time limit'));
-  if(tl.length>=6&&set.maxHold>40){const s=stats(tl);if(s.expR<-0.15)add({id:'time',key:'rule:maxHold',kind:'maxHold',sev:'info',n:s.n,title:`Trades that hit the time limit lose on average (${fr(s.expR)})`,body:`${s.n} trades ran out of time. If a scalp hasn’t worked in 40 minutes it rarely does; a shorter limit frees the slot for a better setup.`,conf:confOf(s.n),act:{label:'Time limit → 40 min',cmd:{fut:{maxHold:40},spot:{maxHold:40}},summary:'Time limit → 40 min',auto:true}})}
+  // exits are take-profit or stop-loss only: no suggestions about signal exits or time limits
   const tagG={};for(const t of T)for(const g of t.tags)(tagG[g]=tagG[g]||[]).push(t);
   const bestTag=Object.entries(tagG).filter(([k,a])=>a.length>=6).map(([k,a])=>[k,stats(a)]).sort((a,b)=>b[1].expR-a[1].expR)[0];
   if(bestTag&&bestTag[1].expR>S0.expR+0.2&&bestTag[1].expR>0)add({id:'tag-'+bestTag[0],sev:'good',title:`Best setups carry the “${bestTag[0]}” tag`,body:`${bestTag[1].n} trades, avg <b>${fr(bestTag[1].expR)}</b>, win rate ${bestTag[1].wr.toFixed(0)}% vs ${fr(S0.expR)} overall. When trading by hand, favor cards with this tag.`,conf:confOf(bestTag[1].n)});
@@ -208,6 +203,6 @@ function autopilotStep(ctx){
   saveMem(mem);return{changed,notes,mem};
 }
 
-window.AgentCore={VERSION:5,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
+window.AgentCore={VERSION:6,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
   badCoins,badHours,findings,MISTAKES,mistakeReport,loadMem,saveMem,vetoed,veto,snapshotOf,applyTo,recordLesson,revertLesson,autopilotStep};
 })();
