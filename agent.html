@@ -159,10 +159,11 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
   <p class="disclaimer">The agent studies your demo trades only. It looks for patterns that lost money and suggests rules to avoid them. Past results do not guarantee future results: a rule that fits the last 30 trades can fail on the next 30, so treat low-confidence findings as hints and keep collecting trades. It never places real orders. Apply works when this page and the scanner open from the same place (the same folder on your computer, or the same GitHub Pages site).</p>
 </div>
 
-<script src="agent-core.js"></script>
+<script src="agent-core.js?v=5"></script>
 <script>
 'use strict';
 if(!window.AgentCore)document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f45d70;border-radius:8px;color:#f45d70">agent-core.js is missing. Put agent-core.js in the same folder (or GitHub repo) as this page.</p>');
+if(window.AgentCore&&!(AgentCore.VERSION>=5))document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f2b648;border-radius:8px;color:#f2b648">An old copy of agent-core.js is loaded, so some fixes won’t show. Replace agent-core.js with the newest file, then press Ctrl+F5. On GitHub Pages, wait 10 minutes after uploading.</p>');
 const KEYS={S:'scalpRadarV1',D:'scalpRadarDemoV1',F:'scalpRadarFutV1',CMD:'scalpRadarAgentCmd',AG:'scalpRadarAgentV1'};
 const $=s=>document.querySelector(s);
 const {sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,stats,drawdown,confOf,sweep,groupBy}=AgentCore;
@@ -208,7 +209,7 @@ function render(){
   const T=allTrades(),set=SET(),S0=stats(T),base=baseBal(),dd=drawdown(T,base),m=acctMode();
   FND=findings(T,set);
   const nf=(SRC.fut&&SRC.fut.closed||[]).length,ns=(SRC.spot&&SRC.spot.closed||[]).length,openN=(SRC.fut&&SRC.fut.open||[]).length+(SRC.spot&&SRC.spot.open||[]).length;
-  $('#status').textContent=`${SRC.from==='file'?'Loaded from export file':'Reading this browser’s demo data'} · futures ${nf} closed, spot ${ns} closed, ${openN} open · analyzing: ${m} · updated ${new Date().toLocaleTimeString()}`;
+  $('#status').textContent=`${SRC.from==='file'?'Loaded from export file':'Reading this browser’s demo data'} · futures ${nf} closed, spot ${ns} closed, ${openN} open · analyzing: ${m} · brain v${AgentCore.VERSION||'?'} · updated ${new Date().toLocaleTimeString()}`;
   // verdict
   const v=$('#verdict');
   if(!T.length){v.className='verdict';v.innerHTML=`<div class="head">No closed trades yet</div><p>${nf+ns===0&&!SRC.fut&&!SRC.spot?'No demo data found in this browser. Open the scanner from this same folder or site, let it run with auto-scan on, or load an export file.':'The demos have not closed a trade yet. Keep the scanner open with auto-scan on and check back later.'}</p>`}

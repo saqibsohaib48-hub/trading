@@ -208,6 +208,6 @@ function autopilotStep(ctx){
   saveMem(mem);return{changed,notes,mem};
 }
 
-window.AgentCore={KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
+window.AgentCore={VERSION:5,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
   badCoins,badHours,findings,MISTAKES,mistakeReport,loadMem,saveMem,vetoed,veto,snapshotOf,applyTo,recordLesson,revertLesson,autopilotStep};
 })();
