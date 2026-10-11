@@ -126,6 +126,10 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
   <h2>Agent memory <small>What the agent learned from your mistakes, what it is testing, and what it undid</small></h2>
   <div class="box" id="memBox"></div>
 
+  <h2>Indicator win rates <small>Your 29 indicators ranked by how often trades won when each one agreed. The scanner weights them the same way.</small></h2>
+  <div class="tablebox"><table><thead><tr><th>#</th><th>Indicator</th><th>Agreed on</th><th>Win % when agreed</th><th>Win % when against</th><th>Net when agreed</th><th>Weight now</th></tr></thead><tbody id="indTable"></tbody></table></div>
+  <p class="sub" id="indNote"></p>
+
   <h2>Current scanner settings <small>What the scanner and demos are using right now</small></h2>
   <div class="box" id="current"></div>
 
@@ -133,7 +137,7 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
   <div class="box">
     <div class="whatif">
       <label class="f">Min score<input id="w_score" type="number" min="50" max="95" step="1"></label>
-      <label class="f">Min indicators (of 20)<input id="w_ind" type="number" min="0" max="20" step="1"></label>
+      <label class="f">Min indicator agreement (%)<input id="w_ind" type="number" min="0" max="100" step="1"></label>
       <label class="f">Direction<select id="w_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
       <label class="f chk"><input id="w_block" type="checkbox"> Skip losing coins</label>
       <label class="f chk"><input id="w_hours" type="checkbox"> Skip losing hours</label>
@@ -151,7 +155,7 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
   <div class="box"><canvas id="eq"></canvas></div>
 
   <h2>Trade journal <small id="jNote"></small></h2>
-  <div class="tablebox"><table><thead><tr><th>Closed</th><th>Account</th><th>Coin</th><th>Side</th><th>Score</th><th>Ind</th><th>RSI</th><th>ATR %</th><th>Result</th><th>Held</th><th>R</th><th>Net</th></tr></thead><tbody id="journal"></tbody></table></div>
+  <div class="tablebox"><table><thead><tr><th>Closed</th><th>Account</th><th>Coin</th><th>Side</th><th>Score</th><th>Ind %</th><th>RSI</th><th>ATR %</th><th>Result</th><th>Held</th><th>R</th><th>Net</th></tr></thead><tbody id="journal"></tbody></table></div>
 
   <h2>Memory log <small>Every change made by you or the autopilot, and every review</small></h2>
   <div class="box"><div class="log" id="log"></div></div>
@@ -159,11 +163,11 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
   <p class="disclaimer">The agent studies your demo trades only. It looks for patterns that lost money and suggests rules to avoid them. Past results do not guarantee future results: a rule that fits the last 30 trades can fail on the next 30, so treat low-confidence findings as hints and keep collecting trades. It never places real orders. Apply works when this page and the scanner open from the same place (the same folder on your computer, or the same GitHub Pages site).</p>
 </div>
 
-<script src="agent-core.js?v=6"></script>
+<script src="agent-core.js?v=7"></script>
 <script>
 'use strict';
 if(!window.AgentCore)document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f45d70;border-radius:8px;color:#f45d70">agent-core.js is missing. Put agent-core.js in the same folder (or GitHub repo) as this page.</p>');
-if(window.AgentCore&&!(AgentCore.VERSION>=6))document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f2b648;border-radius:8px;color:#f2b648">An old copy of agent-core.js is loaded, so some fixes won’t show. Replace agent-core.js with the newest file, then press Ctrl+F5. On GitHub Pages, wait 10 minutes after uploading.</p>');
+if(window.AgentCore&&!(AgentCore.VERSION>=7))document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f2b648;border-radius:8px;color:#f2b648">An old copy of agent-core.js is loaded, so some fixes won’t show. Replace agent-core.js with the newest file, then press Ctrl+F5. On GitHub Pages, wait 10 minutes after uploading.</p>');
 const KEYS={S:'scalpRadarV1',D:'scalpRadarDemoV1',F:'scalpRadarFutV1',CMD:'scalpRadarAgentCmd',AG:'scalpRadarAgentV1'};
 const $=s=>document.querySelector(s);
 const {sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,stats,drawdown,confOf,sweep,groupBy}=AgentCore;
@@ -194,7 +198,7 @@ function sendCmd(cmd,summary,f){
   if(cmd.spot&&SRC.spot)SRC.spot.cfg=Object.assign({},SRC.spot.cfg,cmd.spot);
   // send the full set of agent-managed settings, so changes made while the scanner is closed all arrive together
   const st=SET(),pick=(o,ks)=>{const r={};for(const k of ks)if(o&&o[k]!==undefined)r[k]=o[k];return r};
-  const full={S:pick(st,['ready','minInd','side','exitMode','risk','block','badHours','btcFilter','minAtr']),fut:pick(SRC.fut&&SRC.fut.cfg,['lev','risk','maxHold']),spot:pick(SRC.spot&&SRC.spot.cfg,['maxHold'])};
+  const full={S:pick(st,['ready','indPct','side','exitMode','risk','block','badHours','btcFilter','minAtr']),fut:pick(SRC.fut&&SRC.fut.cfg,['lev','risk','maxHold']),spot:pick(SRC.spot&&SRC.spot.cfg,['maxHold'])};
   const prev=getLS(KEYS.CMD),c=Object.assign({id:Date.now()+'-'+Math.random().toString(36).slice(2,7),at:Date.now(),summary:prev&&prev.pendingSince&&Date.now()-prev.at<864e5?prev.summary+'; '+summary:summary},full);
   try{localStorage.setItem(KEYS.CMD,JSON.stringify(c))}catch(e){toast('Could not save. Is browser storage blocked?');return}
   if(!(f&&f.act)){const mem=AgentCore.loadMem();mem.log.unshift({at:c.at,by:'you',text:summary});AgentCore.saveMem(mem)}
@@ -229,18 +233,18 @@ function render(){
     :`<div class="empty">${T.length?'No problems found in your trades right now. Keep the demo running; the agent re-checks every time you open or refresh this page.':'Findings appear here once the demos have closed some trades.'}</div>`;
   // current settings
   $('#current').innerHTML=`<div class="kv" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)) ;gap:10px 24px">
-    ${[['Ready score threshold',set.ready],['Min indicators agreeing',set.minInd+' / 20'],['Trade direction',{BOTH:'Long and short',LONG:'Long only',SHORT:'Short only'}[set.side]],['Exits','Take-profit or stop-loss only'],['Risk per trade',`${set.risk}% spot · ${set.futRisk}% futures`],['Futures leverage',set.lev+'×'],['Against-BTC trades',set.btcFilter?'Skipped':'Allowed'],['Min volatility',set.minAtr?set.minAtr+'% ATR':'Off']].map(([k,v])=>`<div><div class="k">${k}</div><div style="font:600 16px var(--f-mono);margin-top:3px">${v}</div></div>`).join('')}</div>
+    ${[['Ready score threshold',set.ready],['Min indicator agreement',set.indPct+'% weighted'],['Trade direction',{BOTH:'Long and short',LONG:'Long only',SHORT:'Short only'}[set.side]],['Exits','Take-profit or stop-loss only'],['Risk per trade',`${set.risk}% spot · ${set.futRisk}% futures`],['Futures leverage',set.lev+'×'],['Against-BTC trades',set.btcFilter?'Skipped':'Allowed'],['Min volatility',set.minAtr?set.minAtr+'% ATR':'Off']].map(([k,v])=>`<div><div class="k">${k}</div><div style="font:600 16px var(--f-mono);margin-top:3px">${v}</div></div>`).join('')}</div>
     <div style="margin-top:14px;display:grid;gap:10px">
       <div><div class="k" style="margin-bottom:6px">Blocked coins</div><div class="chips">${set.block.length?set.block.map(c=>`<span class="chip">${c}<button type="button" data-unblock="${c}" aria-label="Unblock ${c}">✕</button></span>`).join(''):'<span class="sub">None</span>'}</div></div>
       <div><div class="k" style="margin-bottom:6px">Paused hours (local time)</div><div class="chips">${set.badHours.length?set.badHours.map(h=>`<span class="chip">${String(h).padStart(2,'0')}:00<button type="button" data-unhour="${h}" aria-label="Unpause ${h}:00">✕</button></span>`).join(''):'<span class="sub">None</span>'}</div></div>
     </div>`;
   // what-if defaults
-  if(!$('#w_score').value){$('#w_score').value=set.ready;$('#w_ind').value=set.minInd;$('#w_side').value=set.side}
-  renderMemory(T,set);renderWhatIf(T,set);renderBreakdown(T);drawEquity(T,base);
+  if(!$('#w_score').value){$('#w_score').value=set.ready;$('#w_ind').value=set.indPct;$('#w_side').value=set.side}
+  renderMemory(T,set);renderIndicators(T);renderWhatIf(T,set);renderBreakdown(T);drawEquity(T,base);
   // journal
   $('#jNote').textContent=T.length?`latest ${Math.min(300,T.length)} of ${T.length}`:'';
   $('#journal').innerHTML=T.length?T.slice(-300).reverse().map(t=>`<tr><td class="mut">${new Date(t.closeAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td><td>${t.acct}${t.lev>1?' '+t.lev+'×':''}</td><td><b>${t.base}</b></td>
-    <td><span class="pill ${t.dir}">${t.dir}</span></td><td>${t.score??'—'}</td><td>${t.ind??'—'}</td><td>${t.rsi??'—'}</td><td>${t.atr!=null?t.atr.toFixed(2):'—'}</td>
+    <td><span class="pill ${t.dir}">${t.dir}</span></td><td>${t.score??'—'}</td><td>${t.indPct!=null?t.indPct+'%':'—'}</td><td>${t.rsi??'—'}</td><td>${t.atr!=null?t.atr.toFixed(2):'—'}</td>
     <td class="mut" style="text-align:left">${t.why}</td><td>${dur(t.hold)}</td><td class="${cls(t.R)}">${fr(t.R)}</td><td class="${cls(t.net)}"><b>${smoney(t.net)}</b></td></tr>`).join('')
     :`<tr><td colspan="12" class="mut">No closed trades yet.</td></tr>`;
 }
@@ -271,9 +275,14 @@ function renderMemory(T,set){
     </div>`;
   $('#log').innerHTML=m.log.length?m.log.slice(0,80).map(l=>`<div><time>${new Date(l.at).toLocaleString()}</time><span><b>${l.by==='autopilot'?'Autopilot':'You'}:</b> ${l.text}</span></div>`).join(''):'<span class="sub">Nothing yet.</span>';
 }
+function renderIndicators(T){const st=AgentCore.indicatorStats(T),withIv=T.filter(t=>t.iv).length;
+  $('#indTable').innerHTML=st.map((x,i)=>`<tr><td class="mut">${i+1}</td><td style="text-align:left"><b>${x.name}</b></td><td>${x.n} trades</td>
+    <td>${x.n>=5?`<span class="${x.wr>=55?'up':x.wr<40?'dn':''}">${x.wr.toFixed(0)}%</span>`:'<span class="mut">needs 5</span>'}</td><td class="mut">${x.an>=5?x.awr.toFixed(0)+'%':'—'}</td>
+    <td class="${cls(x.net)}">${x.n?smoney(x.net):'—'}</td><td>${x.n>=10?`<span class="${x.w>1?'up':x.w<1?'dn':''}">${x.w.toFixed(2)}×</span>`:'<span class="mut">1.00× (needs 10)</span>'}</td></tr>`).join('');
+  $('#indNote').textContent=withIv?`Based on ${withIv} closed trade${withIv>1?'s':''} that recorded every indicator vote. A win % above 55% means the indicator helps; below 40% it now counts less.`:'No trades with indicator votes yet. Win rates start filling in as new trades close.'}
 function renderWhatIf(T,set){
   const ms=+$('#w_score').value||0,mi=+$('#w_ind').value||0,side=$('#w_side').value,bc=$('#w_block').checked?badCoins(T,{block:[],badHours:[]}):[],bh=$('#w_hours').checked?badHours(T,{block:[],badHours:[]}):[];
-  const keep=T.filter(t=>(t.score==null||t.score>=ms)&&(t.ind==null||t.ind>=mi)&&(side==='BOTH'||t.dir===side)&&!bc.includes(t.base)&&!bh.includes(t.hour));
+  const keep=T.filter(t=>(t.score==null||t.score>=ms)&&(t.indPct==null||t.indPct>=mi)&&(side==='BOTH'||t.dir===side)&&!bc.includes(t.base)&&!bh.includes(t.hour));
   const a=stats(T),b=stats(keep),base=baseBal();
   const col=(h,s,T2)=>`<div class="col"><h3>${h}</h3><div class="kv"><span>Trades</span><span>${s.n}</span><span>Net after costs</span><span class="${cls(s.net)}">${smoney(s.net)}</span><span>Win rate</span><span>${s.n?s.wr.toFixed(0)+'%':'—'}</span><span>Profit factor</span><span>${s.n?fpf(s.pf):'—'}</span><span>Avg trade</span><span class="${cls(s.expR)}">${s.n?fr(s.expR):'—'}</span><span>Max drawdown</span><span>${drawdown(T2,base).toFixed(1)}%</span></div></div>`;
   const diff=b.net-a.net;
@@ -284,7 +293,7 @@ function renderWhatIf(T,set){
 const BD=[
   ['Direction',t=>t.dir,null],
   ['Score',t=>t.score==null?null:t.score>=85?'85+':t.score>=80?'80–84':t.score>=75?'75–79':t.score>=70?'70–74':'below 70',['below 70','70–74','75–79','80–84','85+']],
-  ['Indicators',t=>t.ind==null?null:t.ind>=16?'16–20':t.ind>=14?'14–15':t.ind>=12?'12–13':'below 12',['below 12','12–13','14–15','16–20']],
+  ['Indicator agreement',t=>t.indPct==null?null:t.indPct>=80?'80%+':t.indPct>=70?'70–79%':t.indPct>=60?'60–69%':t.indPct>=50?'50–59%':'below 50%',['below 50%','50–59%','60–69%','70–79%','80%+']],
   ['Coin',t=>t.base,null],
   ['Hour',t=>String(t.hour).padStart(2,'0')+':00',Array.from({length:24},(_,h)=>String(h).padStart(2,'0')+':00')],
   ['Weekday',t=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.dow],['Mon','Tue','Wed','Thu','Fri','Sat','Sun']],
@@ -337,8 +346,8 @@ $('#current').addEventListener('click',e=>{const set=SET(),u=e.target.closest('[
   if(u)sendCmd({S:{block:set.block.filter(c=>c!==u.dataset.unblock)}},`Unblocked ${u.dataset.unblock}`);
   if(h)sendCmd({S:{badHours:set.badHours.filter(x=>x!==+h.dataset.unhour)}},`Unpaused ${String(h.dataset.unhour).padStart(2,'0')}:00`)});
 ['#w_score','#w_ind','#w_side','#w_block','#w_hours'].forEach(id=>$(id).addEventListener('input',()=>renderWhatIf(allTrades(),SET())));
-$('#w_apply').addEventListener('click',()=>{const T=allTrades(),set=SET(),cmd={S:{ready:+$('#w_score').value,minInd:+$('#w_ind').value,side:$('#w_side').value}};
-  const parts=[`Ready ${cmd.S.ready}`,`indicators ${cmd.S.minInd}`,{BOTH:'long and short',LONG:'long only',SHORT:'short only'}[cmd.S.side]];
+$('#w_apply').addEventListener('click',()=>{const T=allTrades(),set=SET(),cmd={S:{ready:+$('#w_score').value,indPct:+$('#w_ind').value,side:$('#w_side').value}};
+  const parts=[`Ready ${cmd.S.ready}`,`indicators ${cmd.S.indPct}%`,{BOTH:'long and short',LONG:'long only',SHORT:'short only'}[cmd.S.side]];
   if($('#w_block').checked){const bc=badCoins(T,set);if(bc.length){cmd.S.block=[...new Set([...set.block,...bc])];parts.push('block '+bc.join(', '))}}
   if($('#w_hours').checked){const bh=badHours(T,set);if(bh.length){cmd.S.badHours=[...new Set([...set.badHours,...bh])].sort((a,b)=>a-b);parts.push('pause '+bh.join(', ')+'h')}}
   sendCmd(cmd,'What-if rules: '+parts.join(', '))});

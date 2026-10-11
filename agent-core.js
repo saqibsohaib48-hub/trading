@@ -20,7 +20,7 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const DAY=864e5;
 
 /* ---------- settings view (same for both pages) ---------- */
-const DEFS={ready:70,minInd:12,side:'BOTH',exitMode:'off',risk:1,block:[],badHours:[],btcFilter:false,minAtr:0};
+const DEFS={ready:70,minInd:12,indPct:58,side:'BOTH',exitMode:'off',risk:1,block:[],badHours:[],btcFilter:false,minAtr:0};
 function settingsView(S,D,F){const s=Object.assign({},DEFS,S||{});s.block=(s.block||[]).slice();s.badHours=(s.badHours||[]).slice();
   s.lev=F&&F.cfg?F.cfg.lev:10;s.futRisk=F&&F.cfg?F.cfg.risk:1;s.maxHold=F&&F.cfg?F.cfg.maxHold:60;return s}
 
@@ -28,7 +28,7 @@ function settingsView(S,D,F){const s=Object.assign({},DEFS,S||{});s.block=(s.blo
 function norm(t,acct){const c=t.ctx||{},fut=acct==='Futures';
   return{acct,base:t.base,sym:t.sym,dir:t.dir,lev:t.lev||1,openAt:t.openAt,closeAt:t.closeAt,why:t.why||'',
     net:fut?t.net:t.pnl,gross:fut?t.gross:(t.pnl+(t.fees||0)),fees:t.fees||0,funding:t.funding||0,R:t.R||0,hold:(t.closeAt-t.openAt)/60000,
-    score:c.score??t.score??null,ind:c.ind??null,agree:c.agree??null,rsi:c.rsi??null,atr:c.atr??null,volX:c.volX??null,whale:c.whale??null,
+    score:c.score??t.score??null,ind:c.ind??null,indPct:c.indPct??null,iv:c.iv||null,agree:c.agree??null,rsi:c.rsi??null,atr:c.atr??null,volX:c.volX??null,whale:c.whale??null,
     btc:c.btc??null,rank:c.rank??null,tags:c.tags||[],hour:c.hour??new Date(t.openAt).getHours(),dow:c.dow??new Date(t.openAt).getDay(),hasCtx:!!t.ctx}}
 function tradesFrom(spot,fut,mode){const out=[];
   if(mode!=='Spot'&&fut)for(const t of fut.closed||[])out.push(norm(t,'Futures'));
@@ -56,7 +56,7 @@ function veto(key,days=14){const m=loadMem();m.vetoes[key]=Date.now()+days*DAY;m
 const MISTAKES={
   against:{label:'Traded against the BTC trend',guard:s=>s.btcFilter?'Guarded: trades against BTC are skipped':null},
   weak:{label:'Weak signal score (below 75)',guard:s=>s.ready>=75?`Guarded: Ready threshold is ${s.ready}`:null},
-  fewind:{label:'Few indicators agreed (below 14 of 20)',guard:s=>s.minInd>=14?`Guarded: needs ${s.minInd}/20 indicators`:null},
+  fewind:{label:'Indicators did not agree enough (below 60% weighted)',guard:s=>s.indPct>=60?`Guarded: needs ${s.indPct}% indicator agreement`:null},
   stretched:{label:'Entered when RSI was already stretched',guard:()=>null},
   quiet:{label:'Market too quiet: fees ate the move',guard:s=>s.minAtr>=0.2?`Guarded: min volatility ${s.minAtr}%`:null},
   wild:{label:'Market too wild: stop hit by noise',guard:()=>null},
@@ -69,7 +69,7 @@ const MISTAKES={
 function mistakesOf(t,T,i){const m=[];if(t.net>0)return m;
   if(againstBtc(t))m.push('against');
   if(t.score!=null&&t.score<75)m.push('weak');
-  if(t.ind!=null&&t.ind<14)m.push('fewind');
+  if(t.indPct!=null&&t.indPct<60)m.push('fewind');
   if(t.rsi!=null&&((t.dir==='LONG'&&t.rsi>66)||(t.dir==='SHORT'&&t.rsi<34)))m.push('stretched');
   if(t.atr!=null&&t.atr<0.2)m.push('quiet');
   if(t.atr!=null&&t.atr>1.2)m.push('wild');
@@ -88,6 +88,13 @@ function mistakeReport(T,set){const losers=[],counts={};
     .sort((a,b)=>b.lost-a.lost);
   return{losers,rows,unexplained:losers.filter(l=>!l.ms.length).length}}
 
+/* ---------- indicator win rates (same rule the scanner uses for weights) ---------- */
+const IND_NAMES={supertrend:'Supertrend',ichimoku:'Ichimoku Cloud',rsi:'RSI',macd:'MACD',vwap:'VWAP',adx:'ADX / DMI',bb:'Bollinger Bands',stochrsi:'Stochastic RSI',ema:'EMA 9/21/50/200',vp:'Volume Profile',atr:'ATR',psar:'Parabolic SAR',cci:'CCI',wr:'Williams %R',keltner:'Keltner Channels',donchian:'Donchian Channels',hma:'Hull Moving Average',avgvol:'Average Volume',pivots:'Pivot Points Standard',obv:'On-Balance Volume',utbot:'UT Bot Alerts',alpha:'AlphaTrend',half:'HalfTrend',qqe:'QQE MOD',wave:'WaveTrend Oscillator',ssl:'SSL Hybrid',pressure:'Buy/Sell Volume Pressure',tvr:'TradingView Technical Ratings',lorentz:'Lorentzian Classification'};
+function indicatorStats(T){return Object.keys(IND_NAMES).map((id,k)=>{let n=0,w=0,net=0,an=0,aw=0;
+  for(const t of T){const v=t.iv?t.iv[id]:0;if(!v)continue;const s=t.dir==='LONG'?1:-1;if(v===s){n++;net+=t.net;if(t.net>0)w++}else{an++;if(t.net>0)aw++}}
+  const wr=n?w/n*100:null;return{id,name:IND_NAMES[id],order:k,n,wins:w,wr,net,an,awr:an?aw/an*100:null,w:n>=10?Math.max(0.25,Math.min(2,0.25+(wr-35)/20)):1}})
+  .sort((a,b)=>((b.n>=5?b.wr:50)-(a.n>=5?a.wr:50))||a.order-b.order)}
+
 /* ---------- findings (each one is a lesson the agent could learn) ---------- */
 function badCoins(T,set,mem){const g=groupBy(T,t=>t.base);return Object.entries(g).filter(([c,a])=>{const s=stats(a);return a.length>=4&&s.net<0&&s.wr<40&&!set.block.includes(c)&&!(mem&&vetoed(mem,'coin:'+c))}).map(([c])=>c).sort()}
 function badHours(T,set,mem){const g=groupBy(T,t=>t.hour);return Object.entries(g).filter(([h,a])=>{const s=stats(a);return a.length>=5&&s.net<0&&s.expR<-0.3&&!set.badHours.includes(+h)&&!(mem&&vetoed(mem,'hour:'+h))}).sort((a,b)=>stats(a[1]).net-stats(b[1]).net).slice(0,4).map(([h])=>+h).sort((a,b)=>a-b)}
@@ -101,13 +108,13 @@ function findings(T,set,opts){
     else if(S0.exp<=0)add({id:'losing',sev:'bad',title:`Losing after costs: ${smoney(S0.net)} over ${S0.n} trades`,body:`Average <b>${fr(S0.expR)}</b> (${smoney(S0.exp)}) per trade, profit factor ${fpf(S0.pf)}. ${S0.gross>0?'The trades make money before fees, so the fixes below aim at fewer, stronger trades.':'The trades lose even before fees, so the signals need to be stricter. The fixes below show where to start.'}`,conf:confOf(S0.n)});
     else add({id:'thin',sev:'warn',title:`Small profit: ${smoney(S0.net)} over ${S0.n} trades`,body:`Profit factor <b>${fpf(S0.pf)}</b> is below 1.3, so a few bad trades could wipe it out. Look at the fixes below.`,conf:confOf(S0.n)});
   }
-  for(const [key,label,cur,setKey] of [['score','Ready score threshold',set.ready,'ready'],['ind','minimum indicators agreeing',set.minInd,'minInd']]){
-    const {K,rows}=sweep(T,key,cur,key==='score'?92:20),minN=Math.max(10,Math.ceil(K.length*0.3));if(K.length<15)continue;
+  for(const [key,label,cur,setKey] of [['score','Ready score threshold',set.ready,'ready'],['indPct','minimum indicator agreement (%)',set.indPct,'indPct']]){
+    const {K,rows}=sweep(T,key,cur,key==='score'?92:95),minN=Math.max(10,Math.ceil(K.length*0.3));if(K.length<15)continue;
     const b0=stats(K),ok=rows.filter(r=>r.n>=minN&&r.v>cur);if(!ok.length)continue;
     const best=ok.reduce((a,b)=>b.exp>a.exp?b:a);
     if(best.exp>b0.exp+Math.abs(b0.exp)*0.15&&best.exp>0)
       add({id:'cut-'+key+'-'+best.v,key:'rule:'+setKey,kind:setKey,sev:b0.exp<=0?'bad':'warn',n:best.n,title:`Raise the ${label} from ${cur} to ${best.v}`,
-        body:`Trades with ${key==='score'?'score':'indicators'} ≥ <b>${best.v}</b>: ${best.n} trades, <b>${smoney(best.exp)}</b> avg (${fr(best.expR)}), win rate ${best.wr.toFixed(0)}%, PF ${fpf(best.pf)}. All trades: ${K.length} trades, ${smoney(b0.exp)} avg, PF ${fpf(b0.pf)}. You trade less often but each trade is better.`,
+        body:`Trades with ${key==='score'?'score':'indicator agreement'} ≥ <b>${best.v}${key==='score'?'':'%'}</b>: ${best.n} trades, <b>${smoney(best.exp)}</b> avg (${fr(best.expR)}), win rate ${best.wr.toFixed(0)}%, PF ${fpf(best.pf)}. All trades: ${K.length} trades, ${smoney(b0.exp)} avg, PF ${fpf(b0.pf)}. You trade less often but each trade is better.`,
         conf:confOf(best.n),act:{label:`Set to ${best.v}`,cmd:{S:{[setKey]:best.v}},summary:`${label} → ${best.v}`,auto:true}});
   }
   const L=stats(T.filter(t=>t.dir==='LONG')),Sh=stats(T.filter(t=>t.dir==='SHORT'));
@@ -128,7 +135,7 @@ function findings(T,set,opts){
   if(!(set.minAtr>=0.2)){const q=T.filter(t=>t.atr!=null&&t.atr<0.2),o=T.filter(t=>t.atr!=null&&t.atr>=0.2);if(q.length>=10&&o.length>=10){const s=stats(q),w=stats(o);if(s.expR<0&&w.expR>s.expR+0.2)add({id:'atr',key:'rule:minAtr',kind:'minAtr',sev:'warn',n:s.n,title:'Quiet markets lose money after fees',body:`When 5m volatility (ATR) was below 0.2%: ${s.n} trades, avg <b>${fr(s.expR)}</b>. Above it: avg ${fr(w.expR)}. Moves that small don’t pay for the fees.`,conf:confOf(s.n),act:{label:'Min volatility 0.2%',cmd:{S:{minAtr:0.2}},summary:'Skip trades when ATR is below 0.2%',auto:true}})}}
   if(T.length>=10){const s=stats(T),costs=s.fees-s.funding;
     if(s.gross>0&&costs/s.gross>0.5)add({id:'costs',key:'rule:ready',kind:'ready',sev:'warn',n:s.n,title:`Fees${s.funding?' and funding':''} eat ${(costs/s.gross*100).toFixed(0)}% of your gross profit`,body:`Your trades made ${smoney(s.gross)} before costs, then paid ${money(s.fees)} in fees${s.funding?` and ${smoney(-s.funding)} in funding`:''} (about ${money(s.fees/s.n)} per trade). The direction is right; there are too many small trades. Raising the Ready threshold by 3 means fewer, stronger trades that keep more of the move.`,conf:confOf(s.n),act:{label:`Ready → ${set.ready+3}`,cmd:{S:{ready:set.ready+3}},summary:`Ready threshold → ${set.ready+3} (cut fees)`,auto:true}});
-    if(s.gross<=0)add({id:'noedge',sev:'bad',title:'No edge before costs',body:`The trades lost ${smoney(s.gross)} even before fees. The entries are the problem, not the fees. Stricter entries are the first step; the What-if simulator shows which rules would have been profitable.`,key:'rule:start',kind:'ready',n:s.n,conf:confOf(s.n),act:{label:`Ready → ${Math.min(85,set.ready+3)}, indicators → ${Math.min(18,set.minInd+2)}`,cmd:{S:{ready:Math.min(85,set.ready+3),minInd:Math.min(18,set.minInd+2)}},summary:`Stricter entries: Ready → ${Math.min(85,set.ready+3)}, indicators → ${Math.min(18,set.minInd+2)}`,auto:true}})}
+    if(s.gross<=0)add({id:'noedge',sev:'bad',title:'No edge before costs',body:`The trades lost ${smoney(s.gross)} even before fees. The entries are the problem, not the fees. Stricter entries are the first step; the What-if simulator shows which rules would have been profitable.`,key:'rule:start',kind:'ready',n:s.n,conf:confOf(s.n),act:{label:`Ready → ${Math.min(85,set.ready+3)}, indicators → ${Math.min(85,set.indPct+5)}%`,cmd:{S:{ready:Math.min(85,set.ready+3),indPct:Math.min(85,set.indPct+5)}},summary:`Stricter entries: Ready → ${Math.min(85,set.ready+3)}, indicator agreement → ${Math.min(85,set.indPct+5)}%`,auto:true}})}
   const dd=drawdown(T,base);
   if(T.length>=10&&(dd>10||S0.maxL>=6)&&set.risk>0.25)add({id:'risk',key:'rule:risk',kind:'risk',sev:'bad',n:T.length,title:`Drawdown ${dd.toFixed(1)}%, ${S0.maxL} losses in a row`,body:`At the current risk this streak costs too much. Halving risk per trade halves the damage while the other rules improve.`,conf:confOf(T.length),
     act:{label:'Halve risk',cmd:{S:{risk:Math.max(0.25,+(set.risk/2).toFixed(2))},fut:{risk:Math.max(0.25,+(set.futRisk/2).toFixed(2))}},summary:`Risk per trade → ${Math.max(0.25,+(set.risk/2).toFixed(2))}% spot, ${Math.max(0.25,+(set.futRisk/2).toFixed(2))}% futures`,auto:true,safety:true}});
@@ -140,10 +147,10 @@ function findings(T,set,opts){
   if(bestTag&&bestTag[1].expR>S0.expR+0.2&&bestTag[1].expR>0)add({id:'tag-'+bestTag[0],sev:'good',title:`Best setups carry the “${bestTag[0]}” tag`,body:`${bestTag[1].n} trades, avg <b>${fr(bestTag[1].expR)}</b>, win rate ${bestTag[1].wr.toFixed(0)}% vs ${fr(S0.expR)} overall. When trading by hand, favor cards with this tag.`,conf:confOf(bestTag[1].n)});
   // never say "fixes below" without one: give a safe starting fix when losing and nothing else has enough data
   if(T.length>=10&&S0.exp<=0&&!out.some(f=>f.act&&f.sev!=='info')&&!vetoed(mem,'rule:start')){
-    const r2=Math.min(85,set.ready+3),i2=Math.min(18,set.minInd+2);
-    add({id:'start',key:'rule:start',kind:'ready',sev:'warn',n:T.length,title:`Start here: stricter entries (Ready ${set.ready} → ${r2}, indicators ${set.minInd} → ${i2})`,
+    const r2=Math.min(85,set.ready+3),i2=Math.min(85,set.indPct+5);
+    add({id:'start',key:'rule:start',kind:'ready',sev:'warn',n:T.length,title:`Start here: stricter entries (Ready ${set.ready} → ${r2}, indicator agreement ${set.indPct}% → ${i2}%)`,
       body:`With ${T.length} trades${T.filter(t=>!t.hasCtx).length?`, ${T.filter(t=>!t.hasCtx).length} of them without entry details,`:''} there isn’t enough data yet to pinpoint the exact cause. The safest first step for a losing scalper is fewer, higher-quality trades: it cuts fees and drops the weakest setups. The agent re-checks after the next 20 trades and undoes it if results get worse.`,
-      conf:confOf(T.length),act:{label:'Apply both',cmd:{S:{ready:r2,minInd:i2}},summary:`Stricter entries: Ready → ${r2}, indicators → ${i2}`,auto:true}})}
+      conf:confOf(T.length),act:{label:'Apply both',cmd:{S:{ready:r2,indPct:i2}},summary:`Stricter entries: Ready → ${r2}, indicator agreement → ${i2}%`,auto:true}})}
   const order={bad:0,warn:1,good:2,info:3};return out.sort((a,b)=>order[a.sev]-order[b.sev]);
 }
 
@@ -203,6 +210,6 @@ function autopilotStep(ctx){
   saveMem(mem);return{changed,notes,mem};
 }
 
-window.AgentCore={VERSION:6,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
+window.AgentCore={VERSION:7,indicatorStats,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
   badCoins,badHours,findings,MISTAKES,mistakeReport,loadMem,saveMem,vetoed,veto,snapshotOf,applyTo,recordLesson,revertLesson,autopilotStep};
 })();
