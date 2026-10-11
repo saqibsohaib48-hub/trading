@@ -120,6 +120,8 @@ td button{padding:4px 10px;font-size:12px}
 .live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--long);margin-right:6px;vertical-align:middle;animation:blink 1.6s infinite}
 .live.off{background:var(--dim);animation:none}
 @keyframes blink{50%{opacity:.3}}
+.order{font:13px/1.5 var(--f-mono);padding:8px 10px;background:var(--panel2);border-radius:6px}
+.order .mut{font-size:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -142,6 +144,8 @@ td button{padding:4px 10px;font-size:12px}
     <label class="f">Auto-scan every (min)<input id="s_refresh" type="number" min="1" max="60" step="1"></label>
     <label class="f">Account size ($)<input id="s_account" type="number" min="10" step="10"></label>
     <label class="f">Risk per trade (%)<input id="s_risk" type="number" min="0.1" max="5" step="0.1"></label>
+    <label class="f">Your futures leverage (×)<input id="s_lev" type="number" min="1" max="125" step="1"></label>
+    <label class="f">Spot fee per side (%)<input id="s_spotFee" type="number" min="0" max="0.5" step="0.01"></label>
     <label class="f">Ready score threshold<input id="s_ready" type="number" min="55" max="90" step="1"></label>
     <label class="f">Min indicators agreeing (of 20)<input id="s_minInd" type="number" min="5" max="20" step="1"></label>
     <label class="f">Trade direction<select id="s_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
@@ -151,7 +155,8 @@ td button{padding:4px 10px;font-size:12px}
 
   <nav class="tabs" id="tabs">
     <button type="button" data-v="Scan" class="on">Scanner</button>
-    <button type="button" data-v="Demo">Demo account<span class="badge" id="tabBadge"></span></button>
+    <button type="button" data-v="Demo">Spot demo<span class="badge" id="tabBadge"></span></button>
+    <button type="button" data-v="Fut">Futures demo<span class="badge" id="tabBadgeF"></span></button>
   </nav>
 
   <div id="viewDemo" hidden>
@@ -171,6 +176,33 @@ td button{padding:4px 10px;font-size:12px}
     <h2>Trade history <small id="histNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Fees</th><th>P&amp;L</th><th>R</th><th>Held</th></tr></thead><tbody id="dhist"></tbody></table></div>
     <p class="disclaimer">How the demo works: when a scan marks a coin READY, the demo opens a trade at the scan price, sized so the stop loss costs your risk % (set in Settings) of the demo balance. Prices are checked every 5 seconds. At TP1 it closes 50% and moves the stop to entry. At TP2 it closes another 30% and moves the stop to TP1. At TP3 it closes the rest. Trades still open after the time limit close at market. Fees are charged on every fill. Max 10× of balance per trade, one trade per coin, and a 15-minute pause on a coin after it closes. The demo only runs while this page is open, and it is saved in this browser. Real fills can be worse than these results because of slippage and very fast moves.</p>
+  </div>
+
+  <div id="viewFut" hidden>
+    <section class="settings">
+      <label class="f">Starting balance ($)<input id="f_start" type="number" min="100" step="100"></label>
+      <label class="f">Leverage (×)<input id="f_lev" type="number" min="1" max="125" step="1"></label>
+      <label class="f">Risk per trade (%)<input id="f_risk" type="number" min="0.1" max="5" step="0.1"></label>
+      <label class="f">Max open trades<input id="f_maxOpen" type="number" min="1" max="20" step="1"></label>
+      <label class="f">Maker fee (%)<input id="f_maker" type="number" min="0" max="0.2" step="0.001"></label>
+      <label class="f">Taker fee (%)<input id="f_taker" type="number" min="0" max="0.2" step="0.001"></label>
+      <label class="f">Extra slippage (%)<input id="f_slip" type="number" min="0" max="0.5" step="0.01"></label>
+      <label class="f">Maintenance margin, alts (%)<input id="f_mmr" type="number" min="0.1" max="10" step="0.1"></label>
+      <label class="f">Close trade after (min)<input id="f_maxHold" type="number" min="5" max="1440" step="5"></label>
+      <label class="f chk"><input id="f_bnb" type="checkbox"> Pay fees in BNB (−10%)</label>
+      <label class="f chk"><input id="f_auto" type="checkbox"> Auto-take READY signals</label>
+      <div style="align-self:end"><button id="f_reset" type="button">Reset futures demo</button></div>
+      <p class="sub" id="f_levNote" style="grid-column:1/-1;margin:0"></p>
+    </section>
+    <section class="pulse" id="fstats"></section>
+    <h2>Equity curve <small>Wallet balance after every fill, fee and funding payment. Dashed line = starting balance.</small></h2>
+    <div class="eqbox"><canvas id="eqF" style="width:100%;height:200px;display:block"></canvas></div>
+    <h2>Open positions <small id="fopenNote"></small></h2>
+    <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Mark</th><th>Liq. price</th><th>Stop</th><th>Next target</th><th>Size</th><th>Margin</th><th>Unrealized</th><th>Funding</th><th>ROE (net)</th><th>Open for</th><th></th></tr></thead><tbody id="fopen"></tbody></table></div>
+    <p class="sub" id="fskip"></p>
+    <h2>Trade history <small id="fhistNote"></small></h2>
+    <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Gross</th><th>Fees</th><th>Funding</th><th>Net</th><th>ROE</th><th>R</th><th>Held</th></tr></thead><tbody id="fhist"></tbody></table></div>
+    <p class="disclaimer">How the futures demo works, like a Binance USDⓈ-M isolated-margin position: entries are market orders filled at the live futures ask (long) or bid (short) plus your extra slippage, and pay the taker fee. The stop keeps the signal's distance in %, and size is set so that hitting the stop, including fees and slippage, costs your risk % of the balance. Take-profits are limit orders filled at the target price with the maker fee; stops are stop-market orders resting on the exchange, so they fill at the stop price with double slippage and the taker fee; the time limit and manual closes are market orders at the live bid/ask with slippage and the taker fee. Funding is charged or paid at each real funding time using the live rate and mark price (longs pay when the rate is positive). Liquidation uses the mark price and an estimated maintenance margin; if it is hit, the position's whole margin is lost. A signal is skipped if its stop sits beyond the liquidation price or there isn't enough free margin. Maintenance margin rates and maximum leverage vary by coin and position size on Binance, so check your own limits before trading live.</p>
   </div>
 
   <div id="viewScan">
@@ -224,7 +256,7 @@ td button{padding:4px 10px;font-size:12px}
 <script>
 'use strict';
 /* ---------- settings ---------- */
-const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,side:'BOTH',futOnly:false,sound:false,auto:true};
+const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,lev:10,spotFee:0.1,side:'BOTH',futOnly:false,sound:false,auto:true};
 let S=Object.assign({},DEF);
 try{Object.assign(S,JSON.parse(localStorage.getItem('scalpRadarV1')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('scalpRadarV1',JSON.stringify(S))}catch(e){}}
@@ -579,6 +611,7 @@ async function scan(){
     const btcT=all.find(t=>t.symbol==='BTCUSDT');
     cands=cands.filter(t=>t.symbol!=='BTCUSDT');
     const ctx={fund,fng,btcBias:null,btc4h:0};
+    await loadFilters([...cands.map(t=>t.symbol),'BTCUSDT']);
     setStatus(`Analyzing BTC first, then ${cands.length} coins…`);
     const btc=await analyze('BTCUSDT',btcT,ctx);
     ctx.btcBias=(btc.checks.find(c=>c.id==='trend1h').b*3+btc.checks.find(c=>c.id==='struct15').b*2.5+btc.checks.find(c=>c.id==='trend4h').b*2)/7.5;ctx.btc4h=btc.chg4h;
@@ -593,7 +626,7 @@ async function scan(){
     if(fresh.length&&S.sound&&STATE.readySet.size+1)beep();
     STATE.readySet=ready;
     render();
-    demoAfterScan();renderDemo();
+    demoAfterScan();renderDemo();futAfterScan();
     setStatus(`Last scan ${new Date().toLocaleTimeString()} · ${STATE.rows.length} coins analyzed${errors?` · ${errors} skipped (rate limit or no data)`:''} · source ${SPOT.replace('https://','')}`);
   }catch(e){
     setStatus(e.message||'Scan failed',true);
@@ -605,6 +638,80 @@ function setStatus(t,err){$('#status').innerHTML=`<span class="${err?'err':''}">
 function setProg(p){$('#prog').style.width=p+'%'}
 function beep(){try{const ac=new (window.AudioContext||window.webkitAudioContext)();[0,0.18].forEach(dt=>{const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=880;g.gain.value=0.08;o.connect(g);g.connect(ac.destination);o.start(ac.currentTime+dt);o.stop(ac.currentTime+dt+0.12)})}catch(e){}}
 
+/* ---------- order ticket: exact units and $ value per signal ---------- */
+const FIL={spot:{},fut:{},futAt:0};
+function parseFilters(sym){const o={step:0,tick:0,min:0};for(const f of sym.filters||[]){
+  if(f.filterType==='LOT_SIZE'||(f.filterType==='MARKET_LOT_SIZE'&&!o.step))o.step=+f.stepSize||o.step;
+  if(f.filterType==='PRICE_FILTER')o.tick=+f.tickSize;
+  if(f.filterType==='MIN_NOTIONAL'||f.filterType==='NOTIONAL')o.min=+(f.minNotional||f.notional||0)}return o}
+async function loadFilters(symbols){
+  const need=symbols.filter(s=>!FIL.spot[s]);
+  for(let i=0;i<need.length;i+=100){try{const j=await getJSON(SPOT+'/api/v3/exchangeInfo?symbols='+encodeURIComponent(JSON.stringify(need.slice(i,i+100))),15000);for(const x of j.symbols)FIL.spot[x.symbol]=parseFilters(x)}catch(e){}}
+  if(Date.now()-FIL.futAt>6*36e5){try{const j=await getJSON(FAPI+'/fapi/v1/exchangeInfo',15000);for(const x of j.symbols)if(x.quoteAsset==='USDT')FIL.fut[x.symbol]=parseFilters(x);FIL.futAt=Date.now()}catch(e){}}
+}
+const decOf=step=>{if(!step)return 6;const s=String(step);if(s.includes('e-'))return +s.split('e-')[1];const d=s.split('.')[1];return d?d.replace(/0+$/,'').length:0};
+const floorStep=(q,step)=>step?Math.floor(q/step+1e-9)*step:q;
+const roundTick=(p,tick)=>tick?Math.round(p/tick)*tick:p;
+const fq=(q,step)=>q.toLocaleString('en-US',{minimumFractionDigits:decOf(step),maximumFractionDigits:decOf(step)});
+const ft=(p,tick)=>tick?p.toLocaleString('en-US',{minimumFractionDigits:decOf(tick),maximumFractionDigits:decOf(tick),useGrouping:false}):fp(p);
+
+function ticket(r,market){
+  const s=r.dir==='LONG'?1:-1,fut=market==='fut',f=(fut?FIL.fut:FIL.spot)[r.sym]||{step:0,tick:0,min:fut?5:5};
+  if(!fut&&s<0)return{na:'Spot can’t be shorted. Use the futures order.'};
+  if(fut&&!r.hasFut)return{na:'No Binance futures for this coin.'};
+  const lev=fut?S.lev:1,taker=(fut?F.cfg.taker:S.spotFee)/100,maker=(fut?F.cfg.maker:S.spotFee)/100;
+  const entry=roundTick(r.entry,f.tick),sl=roundTick(r.sl,f.tick),tp=r.tp.map(x=>roundTick(x,f.tick)),dist=Math.abs(entry-sl);
+  const riskUsd=S.account*S.risk/100,perUnit=dist+entry*taker+sl*taker;
+  let qty=riskUsd/perUnit,capped=false;const maxQty=S.account*lev*0.98/(entry*(1+taker));
+  if(qty>maxQty){qty=maxQty;capped=true}
+  qty=floorStep(qty,f.step);
+  const q1=floorStep(qty*0.5,f.step),q2=floorStep(qty*0.3,f.step),q3=Math.max(0,qty-q1-q2);
+  const notional=qty*entry,entryFee=notional*taker,warn=[];
+  if(capped)warn.push(fut?`Size capped by your account at ${lev}× leverage`:'Size capped by your account balance');
+  if(notional<f.min)warn.push(`Below Binance minimum order of ${fu(f.min)}. Raise account size or risk.`);
+  if(qty<=0)warn.push('Quantity rounds to zero at this lot size');
+  const tps=[q1,q2,q3].map((q,i)=>({q,price:tp[i],profit:s*(tp[i]-entry)*q-tp[i]*q*maker-entry*q*taker}));
+  const loss=dist*qty+entryFee+sl*qty*taker;
+  let liq=null;if(fut){const mmr=(/^(BTC|ETH)USDT$/.test(r.sym)?F.cfg.mmrMajor:F.cfg.mmr)/100;liq=s>0?entry*(1-1/lev)/(1-mmr):entry*(1+1/lev)/(1+mmr);
+    if(s>0?sl<=liq:sl>=liq)warn.push(`Stop is beyond liquidation at ${lev}×. Use lower leverage.`)}
+  return{fut,side:s>0?'BUY':'SELL',qty,notional,margin:notional/lev,lev,entry,sl,tp,tps,loss,profit:sum(tps.map(t=>t.profit)),liq,warn,f,base:r.base,riskUsd};
+}
+function ticketText(r,t){
+  return `${r.base}/USDT ${t.fut?`FUTURES ${t.lev}x isolated`:'SPOT'} — ${t.side} ${fq(t.qty,t.f.step)} ${r.base} (~$${t.notional.toFixed(2)}${t.fut?`, margin $${t.margin.toFixed(2)}`:''})
+Entry: ${ft(t.entry,t.f.tick)}
+Stop loss: ${ft(t.sl,t.f.tick)} (loss ~$${t.loss.toFixed(2)})
+TP1: ${ft(t.tp[0],t.f.tick)} close ${fq(t.tps[0].q,t.f.step)}
+TP2: ${ft(t.tp[1],t.f.tick)} close ${fq(t.tps[1].q,t.f.step)}
+TP3: ${ft(t.tp[2],t.f.tick)} close ${fq(t.tps[2].q,t.f.step)}${t.fut?`\nLiquidation: ~${ft(t.liq,t.f.tick)}`:''}`;
+}
+function ticketHTML(r){
+  const cols=['spot','fut'].map(m=>({m,t:ticket(r,m)}));
+  const cell=(t,fn)=>t.na?'<td class="mut">—</td>':`<td>${fn(t)}</td>`;
+  const row=(lab,fn)=>`<tr><td class="mut" style="text-align:left">${lab}</td>${cols.map(c=>cell(c.t,fn)).join('')}</tr>`;
+  return `<div class="box"><h3>Order ticket · how much to ${r.dir==='LONG'?'buy':'sell'}</h3>
+    <div class="sub">Sized so hitting the stop loses ${S.risk}% of your ${fu(S.account)} account (${fu(S.account*S.risk/100)}), including fees. Quantities are rounded down to Binance’s lot size. Change account size, risk and leverage in Settings.</div>
+    <div class="tablebox" style="border:0"><table style="min-width:420px"><thead><tr><th style="text-align:left"></th><th>Spot</th><th>Futures ${S.lev}×</th></tr></thead><tbody>
+    ${cols.some(c=>c.t.na)?`<tr><td></td>${cols.map(c=>`<td class="mut" style="white-space:normal">${c.t.na||''}</td>`).join('')}</tr>`:''}
+    ${row('Order',t=>`<span class="pill ${t.side==='BUY'?'LONG':'SHORT'}">${t.side}</span>`)}
+    ${row('Quantity',t=>`<b style="font-size:15px">${fq(t.qty,t.f.step)}</b> ${r.base}`)}
+    ${row('Order value',t=>`<b style="font-size:15px">$${t.notional.toLocaleString('en-US',{maximumFractionDigits:2,minimumFractionDigits:2})}</b>`)}
+    ${row('Margin needed',t=>t.fut?money(t.margin):money(t.notional))}
+    ${row('Entry',t=>`<span class="enc">${ft(t.entry,t.f.tick)}</span>`)}
+    ${row('Stop loss',t=>`<span class="slc">${ft(t.sl,t.f.tick)}</span>`)}
+    ${[0,1,2].map(i=>row(`TP${i+1} · close ${[50,30,20][i]}%`,t=>`<span class="tpc">${ft(t.tp[i],t.f.tick)}</span> · ${fq(t.tps[i].q,t.f.step)} <span class="up">${smoney(t.tps[i].profit)}</span>`)).join('')}
+    ${row('Loss if stopped',t=>`<span class="dn">−${money(t.loss)}</span>`)}
+    ${row('Profit if all TPs hit',t=>`<span class="up">${smoney(t.profit)}</span>`)}
+    ${row('Liquidation',t=>t.fut?`<span class="dn">${ft(t.liq,t.f.tick)}</span>`:'<span class="mut">none (spot)</span>')}
+    </tbody></table></div>
+    ${cols.map(c=>c.t.warn&&c.t.warn.length?`<div class="tags">${c.t.warn.map(w=>`<span class="tag warn">${c.m==='fut'?'Futures':'Spot'}: ${w}</span>`).join('')}</div>`:'').join('')}
+    <div class="links">${cols.filter(c=>!c.t.na).map(c=>`<button type="button" data-copy="${c.m}">Copy ${c.m==='fut'?'futures':'spot'} order</button>`).join('')}<span class="sub" id="copyMsg"></span></div>
+    <div class="sub">Fees used: spot ${S.spotFee}% · futures maker ${F.cfg.maker}% / taker ${F.cfg.taker}%. Profit figures are after fees, before funding.</div></div>`;
+}
+function cardOrderHTML(r){
+  const fut=r.hasFut?ticket(r,'fut'):null,spot=r.dir==='LONG'?ticket(r,'spot'):null,t=fut&&!fut.na?fut:spot;if(!t||t.na)return'';
+  return `<div class="order"><span class="pill ${t.side==='BUY'?'LONG':'SHORT'}">${t.side}</span> <b>${fq(t.qty,t.f.step)} ${r.base}</b> ≈ <b>$${t.notional.toLocaleString('en-US',{maximumFractionDigits:2,minimumFractionDigits:2})}</b>
+    <span class="mut">${t.fut?`· futures ${t.lev}× · margin ${money(t.margin)}`:'· spot'} · loss at stop −${money(t.loss)}</span></div>`;
+}
 /* ---------- render ---------- */
 function meterColor(r){return r.dir==='LONG'?'var(--long)':'var(--short)'}
 function sizeFor(r){const riskUsd=S.account*S.risk/100,risk=Math.abs(r.entry-r.sl);const qty=riskUsd/risk,notional=qty*r.entry;return{riskUsd,qty,notional,lev:notional/S.account}}
@@ -626,9 +733,9 @@ function cardHTML(r,watch){
     <div class="scorebar"><span>${r.score}</span><span class="meter"><i style="width:${r.score}%;background:${meterColor(r)}"></i></span><span class="mut">/100</span></div>
     <div class="sub"><b style="color:var(--fg)">${r.agree}/${r.checks.length}</b> checks agree · <b style="color:var(--fg)">${r.indAgree}/20</b> indicators · gates ${r.gates.filter(g=>g.pass).length}/${r.gates.length}</div>
     ${levelsHTML(r)}
-    <div class="sub">Risk ${fu(z.riskUsd)} → size ${fu(z.notional)} (${z.lev.toFixed(1)}× of account)</div>
+    ${cardOrderHTML(r)}
     <ul class="reasons">${reasonsFor(r).map(c=>`<li>${c.label}: ${c.text}</li>`).join('')}</ul>
-    <div class="tags">${D.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In demo</span>':''}${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>
+    <div class="tags">${D.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In spot demo</span>':''}${F.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In futures demo</span>':''}${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>
   </article>`;
 }
 function render(){
@@ -672,7 +779,7 @@ function renderTable(){
   $('#tbody').innerHTML=rows.length?rows.map(r=>`<tr tabindex="0" data-sym="${r.sym}">${COLS.map(c=>`<td>${c[3](r)}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${COLS.length}" class="mut">No coins match this filter.</td></tr>`;
 }
 function openDrawer(sym){
-  const r=STATE.rows.find(x=>x.sym===sym);if(!r)return;const z=sizeFor(r);
+  const r=STATE.rows.find(x=>x.sym===sym);if(!r)return;STATE.open=sym;
   const groups=[...new Set(r.checks.map(c=>c.g))];
   $('#drawer').innerHTML=`
     <button class="close" type="button" id="closeD">Close</button>
@@ -680,11 +787,7 @@ function openDrawer(sym){
     <div class="scorebar"><span>Long ${r.long}</span><span class="meter"><i style="width:${r.long}%;background:var(--long)"></i></span><span>Short ${r.short}</span></div>
     <div class="box"><h3>Trade plan · ${r.dir.toLowerCase()} scalp</h3>${levelsHTML(r)}
       <div class="sub">Stop distance ${r.riskPct.toFixed(2)}% (${(r.riskPct/r.atrPct).toFixed(1)}× ATR). Take part profit at TP1 and move the stop to entry.</div></div>
-    <div class="box"><h3>Position size</h3>
-      <div class="levels"><span class="lab">Risk</span><span>${fu(z.riskUsd)}</span><span class="pct">${S.risk}% of ${fu(S.account)}</span>
-      <span class="lab">Quantity</span><span>${z.qty<1?z.qty.toPrecision(4):z.qty.toFixed(z.qty<100?2:0)} ${r.base}</span><span class="pct"></span>
-      <span class="lab">Notional</span><span>${fu(z.notional)}</span><span class="pct">${z.lev.toFixed(1)}× account</span></div>
-      <div class="sub">Change account size and risk % in Settings.</div></div>
+    ${ticketHTML(r)}
     ${r.warn.length||r.tags.length?`<div class="tags">${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>`:''}
     <div class="box"><h3>20-indicator confirmation · ${r.indAgree} agree with ${r.dir.toLowerCase()}</h3>
       <div class="scorebar"><span class="up">${r.ind.filter(x=>x.vote>0).length} buy</span><span class="meter" style="display:flex"><i style="width:${r.ind.filter(x=>x.vote>0).length*5}%;background:var(--long);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote===0).length*5}%;background:var(--dim);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote<0).length*5}%;background:var(--short);border-radius:0"></i></span><span class="dn">${r.ind.filter(x=>x.vote<0).length} sell</span></div>
@@ -813,19 +916,19 @@ function renderDemo(){
     :`<tr><td colspan="10" class="mut" style="text-align:left">Closed trades will appear here with their result and P&amp;L.</td></tr>`;
   drawCurve();
 }
-function drawCurve(){
-  const cv=$('#eq');if($('#viewDemo').hidden||!cv.clientWidth)return;
+function drawCurve(){drawCurveFor('#eq','#viewDemo',D.curve.map(p=>p.b).concat([equity()]),D.base)}
+function drawCurveFor(cvs,view,pts,base){
+  const cv=$(cvs);if($(view).hidden||!cv.clientWidth)return;
   const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
   const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
   const cs=getComputedStyle(document.documentElement),col=n=>cs.getPropertyValue(n).trim();
-  const pts=D.curve.map(p=>p.b).concat([equity()]);
-  let lo=Math.min(...pts,D.base),hi=Math.max(...pts,D.base);if(hi-lo<D.base*0.002){hi+=D.base*0.002;lo-=D.base*0.002}
+  let lo=Math.min(...pts,base),hi=Math.max(...pts,base);if(hi-lo<base*0.002){hi+=base*0.002;lo-=base*0.002}
   const pad=(hi-lo)*0.12;lo-=pad;hi+=pad;
   const L=70,R=10,T=10,B=10,x=i=>L+(W-L-R)*(pts.length<2?1:i/(pts.length-1)),y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
   g.font='11px '+col('--f-mono');g.textBaseline='middle';g.lineWidth=1;
   for(let k=0;k<=4;k++){const v=lo+(hi-lo)*k/4,yy=y(v);g.strokeStyle=col('--line');g.beginPath();g.moveTo(L,yy);g.lineTo(W-R,yy);g.stroke();g.fillStyle=col('--muted');g.fillText('$'+v.toFixed(v>=1000?0:2),4,yy)}
-  g.setLineDash([5,4]);g.strokeStyle=col('--dim');g.beginPath();g.moveTo(L,y(D.base));g.lineTo(W-R,y(D.base));g.stroke();g.setLineDash([]);
-  const c=pts[pts.length-1]>=D.base?col('--long'):col('--short');
+  g.setLineDash([5,4]);g.strokeStyle=col('--dim');g.beginPath();g.moveTo(L,y(base));g.lineTo(W-R,y(base));g.stroke();g.setLineDash([]);
+  const c=pts[pts.length-1]>=base?col('--long'):col('--short');
   g.beginPath();pts.forEach((v,i)=>i?g.lineTo(x(i),y(v)):g.moveTo(x(i),y(v)));g.strokeStyle=c;g.lineWidth=2;g.lineJoin='round';g.stroke();
   g.lineTo(x(pts.length-1),y(lo));g.lineTo(x(0),y(lo));g.closePath();g.globalAlpha=.12;g.fillStyle=c;g.fill();g.globalAlpha=1;
   g.beginPath();g.arc(x(pts.length-1),y(pts[pts.length-1]),4,0,Math.PI*2);g.fillStyle=c;g.fill();
@@ -842,14 +945,170 @@ $('#d_reset').onclick=()=>{const b=$('#d_reset');
 $('#dopen').addEventListener('click',e=>{const b=e.target.closest('[data-close]');if(!b)return;const p=D.open.find(x=>String(x.id)===b.dataset.close);if(p){fill(p,p.left,p.last,'Manual close');dsave();renderDemo()}});
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
   document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
-  $('#viewScan').hidden=b.dataset.v!=='Scan';$('#viewDemo').hidden=b.dataset.v!=='Demo';renderDemo()});
-window.addEventListener('resize',drawCurve);
+  $('#viewScan').hidden=b.dataset.v!=='Scan';$('#viewDemo').hidden=b.dataset.v!=='Demo';$('#viewFut').hidden=b.dataset.v!=='Fut';renderDemo();renderFut()});
+window.addEventListener('resize',()=>{drawCurve();renderFut()});
 setInterval(pollPrices,5000);
 
+/* ---------- futures demo (USDⓈ-M, isolated margin, leverage) ---------- */
+const FDEF={start:1000,lev:10,risk:1,maxOpen:5,maker:0.02,taker:0.05,bnb:false,slip:0.03,mmr:1.0,mmrMajor:0.4,maxHold:60,auto:true};
+let F={cfg:Object.assign({},FDEF),base:1000,bal:1000,open:[],closed:[],curve:[],cool:{},skipped:[],since:Date.now()};
+try{const x=JSON.parse(localStorage.getItem('scalpRadarFutV1')||'null');if(x){F=Object.assign(F,x);F.cfg=Object.assign({},FDEF,x.cfg)}}catch(e){}
+if(!F.curve.length)F.curve=[{t:Date.now(),b:F.bal}];
+function fsave(){try{localStorage.setItem('scalpRadarFutV1',JSON.stringify(F))}catch(e){}}
+const FX={mark:{},bid:{},ask:{},rate:{},next:{},at:0};
+let fxOk=false;
+async function futPrices(){
+  const [pi,bt]=await Promise.all([getJSON(FAPI+'/fapi/v1/premiumIndex',8000),getJSON(FAPI+'/fapi/v1/ticker/bookTicker',8000)]);
+  for(const x of pi){FX.mark[x.symbol]=+x.markPrice;FX.rate[x.symbol]=+x.lastFundingRate;FX.next[x.symbol]=+x.nextFundingTime}
+  for(const x of bt){FX.bid[x.symbol]=+x.bidPrice;FX.ask[x.symbol]=+x.askPrice}
+  FX.at=Date.now();fxOk=true;
+}
+const feeRate=maker=>(maker?F.cfg.maker:F.cfg.taker)/100*(F.cfg.bnb?0.9:1);
+const marginLeft=p=>p.margin*p.left/p.qty;
+const futUsed=()=>sum(F.open.map(marginLeft));
+const futAvail=()=>F.bal-futUsed();
+const futUnreal=p=>sgn(p)*(p.mark-p.entry)*p.left;
+const futEquity=()=>F.bal+sum(F.open.map(futUnreal));
+function fskip(r,why){F.skipped.unshift({t:Date.now(),base:r.base,dir:r.dir,why});if(F.skipped.length>20)F.skipped.length=20}
+
+function futOpen(r){
+  const c=F.cfg;
+  if(!r.hasFut||F.open.some(p=>p.sym===r.sym)||F.open.length>=c.maxOpen||(F.cool[r.sym]||0)>Date.now())return false;
+  const bid=FX.bid[r.sym],ask=FX.ask[r.sym];if(!bid||!ask)return false;
+  const s=r.dir==='LONG'?1:-1,mid=(bid+ask)/2,ideal=s>0?ask:bid,fill=ideal*(1+s*c.slip/100);
+  const dist=Math.abs(r.entry-r.sl)/r.entry*fill;
+  const sl=fill-s*dist,tp=[1,2,3].map(k=>fill+s*k*dist),lev=c.lev;
+  const mmr=(/^(BTC|ETH)USDT$/.test(r.sym)?c.mmrMajor:c.mmr)/100;
+  const liq=s>0?fill*(1-1/lev)/(1-mmr):fill*(1+1/lev)/(1+mmr);
+  if(s>0?sl<=liq:sl>=liq){fskip(r,`Stop ${fp(sl)} is beyond liquidation ${fp(liq)} at ${lev}×. Lower the leverage.`);return false}
+  const fr=feeRate(false),perUnit=dist+fill*fr+sl*fr+sl*c.slip/100;
+  let qty=F.bal*c.risk/100/perUnit;
+  const maxQty=Math.max(0,futAvail())*0.98/(fill/lev+fill*fr);
+  let capped=false;if(qty>maxQty){qty=maxQty;capped=true}
+  if(qty*fill<5){fskip(r,'Not enough free margin for the $5 minimum order');return false}
+  const notional=qty*fill,margin=notional/lev,fee=notional*fr;
+  F.bal-=fee;
+  F.open.push({id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,lev,mmr,entry:fill,sl,sl0:sl,tp,liq,qty,left:qty,margin,
+    openAt:Date.now(),score:r.score,fees:fee,funding:0,gross:0,slip:Math.abs(fill-mid)*qty,hit:0,mark:FX.mark[r.sym]||fill,mid,
+    nextFund:FX.next[r.sym]||0,capped,exits:[]});
+  F.curve.push({t:Date.now(),b:F.bal});
+  return true;
+}
+function futFill(p,q,price,why,maker,mid){
+  const fee=q*price*feeRate(maker),g=sgn(p)*(price-p.entry)*q;
+  p.gross+=g;p.fees+=fee;F.bal+=g-fee;if(!maker&&mid)p.slip+=Math.abs(price-mid)*q;
+  p.left-=q;p.exits.push({q,price,why});F.curve.push({t:Date.now(),b:F.bal});if(F.curve.length>2000)F.curve.splice(1,1);
+  if(p.left<=p.qty*1e-9){p.left=0;futFinish(p,why)}
+}
+function futLiquidate(p){
+  const m=marginLeft(p);p.gross-=m;F.bal-=m;p.exits.push({q:p.left,price:p.liq,why:'Liquidated'});p.left=0;
+  F.curve.push({t:Date.now(),b:F.bal});futFinish(p,'Liquidated');
+}
+function futFinish(p,why){
+  F.open=F.open.filter(x=>x!==p);
+  const net=p.gross-p.fees+p.funding,riskUsd=Math.abs(p.entry-p.sl0)*p.qty;
+  const tps=p.exits.filter(e=>/^TP/.test(e.why)).map(e=>e.why),best=tps.length?tps[tps.length-1]:null;
+  F.closed.unshift({sym:p.sym,base:p.base,dir:p.dir,lev:p.lev,entry:p.entry,exitAvg:sum(p.exits.map(e=>e.q*e.price))/p.qty,
+    openAt:p.openAt,closeAt:Date.now(),why:best&&why!==best?best+' → '+why:why,gross:p.gross,fees:p.fees,funding:p.funding,slip:p.slip,
+    net,margin:p.margin,roe:net/p.margin*100,R:riskUsd?net/riskUsd:0,notional:p.qty*p.entry});
+  if(F.closed.length>1000)F.closed.length=1000;
+  F.cool[p.sym]=Date.now()+15*60e3;
+}
+function futStep(p){
+  const c=F.cfg,mark=FX.mark[p.sym],bid=FX.bid[p.sym],ask=FX.ask[p.sym];if(!mark||!bid||!ask)return;
+  const s=sgn(p),mid=(bid+ask)/2,exitPx=s>0?bid:ask;p.mark=mark;p.mid=mid;
+  // funding settlement at each funding time (long pays when rate > 0, short receives)
+  if(p.nextFund&&Date.now()>=p.nextFund){const amt=-s*p.left*mark*(FX.rate[p.sym]||0);p.funding+=amt;F.bal+=amt;
+    F.curve.push({t:Date.now(),b:F.bal});p.nextFund=FX.next[p.sym]>p.nextFund?FX.next[p.sym]:p.nextFund+8*36e5}
+  // stop-market order rests on the exchange: it triggers at the stop price and fills with 2x normal slippage
+  if(s*(mid-p.sl)<=0||s*(mark-p.sl)<=0){futFill(p,p.left,p.sl*(1-s*2*c.slip/100),p.hit===0?'Stop loss':p.hit===1?'Breakeven stop':'Profit stop',false,p.sl);return}
+  if(s*(mark-p.liq)<=0){futLiquidate(p);return}
+  if(p.hit<1&&s*(exitPx-p.tp[0])>=0){p.hit=1;futFill(p,p.qty*0.5,p.tp[0],'TP1',true);p.sl=p.entry}
+  if(p.left>0&&p.hit<2&&s*(exitPx-p.tp[1])>=0){p.hit=2;futFill(p,p.qty*0.3,p.tp[1],'TP2',true);p.sl=p.tp[0]}
+  if(p.left>0&&p.hit<3&&s*(exitPx-p.tp[2])>=0){p.hit=3;futFill(p,p.left,p.tp[2],'TP3',true);return}
+  if(p.left>0&&Date.now()-p.openAt>c.maxHold*60e3)futFill(p,p.left,exitPx*(1-s*c.slip/100),'Time limit',false,mid);
+}
+async function futPoll(){
+  if(!F.open.length){renderFut();return}
+  try{await futPrices();for(const p of F.open.slice())futStep(p);fsave()}catch(e){fxOk=false}
+  renderFut();
+}
+async function futAfterScan(){
+  if(!F.cfg.auto)return;
+  const ready=STATE.rows.filter(r=>r.signal==='READY'&&r.hasFut).sort((a,b)=>b.score-a.score);if(!ready.length)return;
+  try{await futPrices()}catch(e){return}
+  let n=0;for(const r of ready)if(futOpen(r))n++;
+  fsave();renderFut();if(n)render();
+}
+function renderFut(){
+  const eq=futEquity(),C=F.closed,net=eq-F.base,un=eq-F.bal;
+  const gross=sum(C.map(t=>t.gross))+sum(F.open.map(p=>p.gross));
+  const fees=sum(C.map(t=>t.fees))+sum(F.open.map(p=>p.fees));
+  const fund=sum(C.map(t=>t.funding))+sum(F.open.map(p=>p.funding));
+  const slip=sum(C.map(t=>t.slip))+sum(F.open.map(p=>p.slip));
+  const wins=C.filter(t=>t.net>0),loss=C.filter(t=>t.net<=0),gw=sum(wins.map(t=>t.net)),gl=-sum(loss.map(t=>t.net));
+  const liqs=C.filter(t=>t.why==='Liquidated').length;
+  let peak=-Infinity,dd=0;for(const p of F.curve.concat([{b:eq}])){peak=Math.max(peak,p.b);dd=Math.max(dd,(peak-p.b)/peak*100)}
+  const costs=fees-fund,share=gross>0?costs/gross*100:null;
+  const tile=(k,v,sub,c='')=>`<div><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="sub">${sub}</div></div>`;
+  $('#fstats').innerHTML=
+    tile('Net P&L after all costs',smoney(net),pct(net/F.base*100)+' on '+money(F.base),cls(net))+
+    tile('Margin balance',money(eq),'wallet + open P&L')+
+    tile('Wallet balance',money(F.bal),'realized, after costs')+
+    tile('Available · Used margin',money(Math.max(0,futAvail())),`${money(futUsed())} locked in ${F.open.length} position${F.open.length===1?'':'s'}`)+
+    tile('Gross P&L',smoney(gross),'price moves only, before fees and funding',cls(gross))+
+    tile('Trading fees',`<span class="dn">−${money(fees)}</span>`,`maker ${F.cfg.maker}% · taker ${F.cfg.taker}%${F.cfg.bnb?' · BNB −10%':''}`)+
+    tile('Funding',smoney(fund),fund>=0?'net received':'net paid',cls(fund))+
+    tile('Spread & slippage',money(slip),'already inside your fill prices')+
+    tile('Costs vs gross profit',share===null?'—':share.toFixed(0)+'%','fees and funding as a share of gross P&L',share!==null&&share>50?'dn':'')+
+    tile('Win rate',C.length?(wins.length/C.length*100).toFixed(0)+'%':'—',`${wins.length} wins · ${loss.length} losses (after costs)`)+
+    tile('Profit factor',gl?(gw/gl).toFixed(2):gw?'∞':'—','net wins ÷ net losses')+
+    tile('Avg trade',C.length?(sum(C.map(t=>t.R))/C.length).toFixed(2)+'R':'—',C.length?smoney(sum(C.map(t=>t.net))/C.length)+' net per trade':'no closed trades')+
+    tile('Max drawdown',dd.toFixed(1)+'%','largest drop from a peak',dd>10?'dn':'')+
+    tile('Liquidations',String(liqs),liqs?'margin fully lost on these':'none so far',liqs?'dn':'');
+  $('#tabBadgeF').innerHTML=`<span class="${cls(net)}">${smoney(net)}</span>`;
+  $('#fopenNote').innerHTML=`<span class="live ${F.cfg.auto?'':'off'}"></span>${F.open.length} of ${F.cfg.maxOpen} slots · ${F.cfg.lev}× isolated · auto-trade ${F.cfg.auto?'on':'off'}${F.open.length?(fxOk?' · mark price live every 5 s':' · waiting for prices'):''}`;
+  $('#fopen').innerHTML=F.open.length?F.open.map(p=>{const u=futUnreal(p),m=marginLeft(p),roe=(u+p.gross-p.fees+p.funding)/p.margin*100,next=p.hit<3?p.tp[p.hit]:null,dl=Math.abs(p.mark-p.liq)/p.mark*100;
+    return `<tr><td><b>${p.base}</b></td><td><span class="pill ${p.dir}">${p.dir} ${p.lev}×</span></td><td>${fp(p.entry)}</td><td>${fp(p.mark)}</td>
+    <td class="${dl<2?'dn':'mut'}">${fp(p.liq)} <span class="mut">${dl.toFixed(1)}%</span></td>
+    <td class="slc">${fp(p.sl)}${p.hit?` <span class="mut">${p.hit===1?'BE':'locked'}</span>`:''}</td><td class="tpc">${next?fp(next)+' <span class="mut">TP'+(p.hit+1)+'</span>':'—'}</td>
+    <td>${fu(p.left*p.mark)}${p.capped?' <span class="tag warn">capped</span>':''}</td><td>${money(m)}</td>
+    <td><span class="${cls(u)}">${smoney(u)}</span></td><td class="${cls(p.funding)}">${p.funding?smoney(p.funding):'—'}</td>
+    <td><span class="${cls(roe)}">${pct(roe,1)}</span></td><td>${dur(Date.now()-p.openAt)}</td>
+    <td><button type="button" data-fclose="${p.id}">Close</button></td></tr>`}).join('')
+    :`<tr><td colspan="14" class="mut" style="text-align:left">No open futures positions. ${F.cfg.auto?'Every READY signal on a coin with futures opens here automatically.':'Turn on “Auto-take READY signals” to start.'}</td></tr>`;
+  $('#fskip').innerHTML=F.skipped.length?'<b>Skipped signals:</b> '+F.skipped.slice(0,5).map(x=>`${x.base} ${x.dir.toLowerCase()} (${x.why})`).join(' · '):'';
+  $('#fhistNote').textContent=C.length?`${C.length} closed trades since ${new Date(F.since).toLocaleDateString()}`:'';
+  $('#fhist').innerHTML=C.length?C.slice(0,200).map(t=>`<tr><td class="mut">${new Date(t.closeAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+    <td><b>${t.base}</b></td><td><span class="pill ${t.dir}">${t.dir} ${t.lev}×</span></td><td>${fp(t.entry)}</td><td>${fp(t.exitAvg)}</td>
+    <td><span class="why ${t.net>0?'win':'loss'}">${t.why}</span></td><td class="${cls(t.gross)}">${smoney(t.gross)}</td><td class="mut">−${money(t.fees)}</td>
+    <td class="${cls(t.funding)}">${t.funding?smoney(t.funding):'—'}</td><td class="${cls(t.net)}"><b>${smoney(t.net)}</b></td>
+    <td class="${cls(t.roe)}">${pct(t.roe,1)}</td><td class="${cls(t.R)}">${t.R.toFixed(2)}</td><td>${dur(t.closeAt-t.openAt)}</td></tr>`).join('')
+    :`<tr><td colspan="13" class="mut" style="text-align:left">Closed futures trades will appear here with gross P&amp;L, fees, funding and net result.</td></tr>`;
+  drawCurveFor('#eqF','#viewFut',F.curve.map(p=>p.b).concat([eq]),F.base);
+}
+function loadFutForm(){['start','lev','risk','maxOpen','maker','taker','slip','mmr','maxHold'].forEach(k=>$('#f_'+k).value=F.cfg[k]);$('#f_bnb').checked=F.cfg.bnb;$('#f_auto').checked=F.cfg.auto;updLevNote()}
+function updLevNote(){const c=F.cfg,mmr=c.mmr/100,lq=(1-(1-1/c.lev)/(1-mmr))*100;
+  $('#f_levNote').textContent=`At ${c.lev}× a ${lq.toFixed(1)}% move against you liquidates the position (alts). Stops wider than that are skipped. Your loss at the stop stays ${c.risk}% of the balance at any leverage; higher leverage only locks less margin and moves liquidation closer.`}
+[['start',100],['lev',1],['risk',0.1],['maxOpen',1],['maker',0],['taker',0],['slip',0],['mmr',0.1],['maxHold',5]].forEach(([k,min])=>$('#f_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);
+  if(isFinite(v)&&v>=min){F.cfg[k]=k==='maxOpen'||k==='lev'?Math.round(Math.min(v,k==='lev'?125:50)):v;fsave();updLevNote();renderFut()}}));
+$('#f_bnb').addEventListener('change',e=>{F.cfg.bnb=e.target.checked;fsave();renderFut()});
+$('#f_auto').addEventListener('change',e=>{F.cfg.auto=e.target.checked;fsave();if(F.cfg.auto)futAfterScan();renderFut()});
+let fResetArm=0;
+$('#f_reset').onclick=()=>{const b=$('#f_reset');
+  if(Date.now()-fResetArm>4000){fResetArm=Date.now();b.textContent='Click again to reset';setTimeout(()=>{if(Date.now()-fResetArm>=3900)b.textContent='Reset futures demo'},4000);return}
+  fResetArm=0;b.textContent='Reset futures demo';
+  F={cfg:F.cfg,base:F.cfg.start,bal:F.cfg.start,open:[],closed:[],curve:[{t:Date.now(),b:F.cfg.start}],cool:{},skipped:[],since:Date.now()};
+  fsave();renderFut();if(STATE.rows.length)futAfterScan()};
+$('#fopen').addEventListener('click',async e=>{const b=e.target.closest('[data-fclose]');if(!b)return;const p=F.open.find(x=>String(x.id)===b.dataset.fclose);if(!p)return;
+  try{await futPrices()}catch(err){}const s=sgn(p),bid=FX.bid[p.sym],ask=FX.ask[p.sym];if(!bid)return;
+  futFill(p,p.left,(s>0?bid:ask)*(1-s*F.cfg.slip/100),'Manual close',false,(bid+ask)/2);fsave();renderFut()});
+setInterval(futPoll,5000);
+
 /* ---------- wiring ---------- */
-const ids=['minVol','deep','refresh','account','risk','ready','minInd'];
+const ids=['minVol','deep','refresh','account','risk','ready','minInd','lev','spotFee'];
 function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
-ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk'].includes(k)&&STATE.rows.length)render()}}));
+ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk','lev','spotFee'].includes(k)&&STATE.rows.length){render();if(STATE.open&&!$('#drawer').hidden)openDrawer(STATE.open)}}}));
 $('#s_futOnly').addEventListener('change',e=>{S.futOnly=e.target.checked;save()});
 $('#s_side').addEventListener('change',e=>{S.side=e.target.value;save();scan()});
 $('#s_sound').addEventListener('change',e=>{S.sound=e.target.checked;save();if(S.sound)beep()});
@@ -863,6 +1122,10 @@ const opener=e=>{const el=e.target.closest('[data-sym]');if(el)openDrawer(el.dat
 $('#tbody').addEventListener('click',opener);$('#cards').addEventListener('click',opener);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();if(e.key==='Enter'&&e.target.matches('[data-sym]'))openDrawer(e.target.dataset.sym)});
 $('#backdrop').onclick=closeDrawer;
+$('#drawer').addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(!b)return;const r=STATE.rows.find(x=>x.sym===STATE.open);if(!r)return;
+  const txt=ticketText(r,ticket(r,b.dataset.copy)),msg=$('#copyMsg');
+  try{await navigator.clipboard.writeText(txt);msg.textContent='Copied ✓'}catch(err){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');msg.textContent='Copied ✓'}catch(e2){msg.textContent='Select and copy manually'}ta.remove()}
+  setTimeout(()=>{msg.textContent=''},2500)});
 setInterval(()=>{
   if(!STATE.last&&!STATE.scanning){$('#p_next').textContent='—';return}
   if(!S.auto){$('#p_next').textContent='off';return}
@@ -873,6 +1136,8 @@ setInterval(()=>{
 loadForm();
 loadDemoForm();
 renderDemo();
+loadFutForm();
+renderFut();
 scan();
 </script>
 </body>
