@@ -133,6 +133,8 @@ td button{padding:4px 10px;font-size:12px}
       <button id="btnScan" class="primary" type="button">Scan now</button>
       <button id="btnAuto" type="button">Auto-scan: on</button>
       <button id="btnSettings" type="button" aria-expanded="false">Settings</button>
+      <a id="agentLink" href="agent.html" target="_blank" rel="noopener" style="font:600 14px var(--f-body);padding:8px 14px;border:1px solid var(--accent);border-radius:6px;text-decoration:none">Trade Agent ↗</a>
+      <span id="apBadge" class="status" style="margin:0"></span>
     </div>
   </header>
   <div class="progress"><i id="prog"></i></div>
@@ -148,6 +150,7 @@ td button{padding:4px 10px;font-size:12px}
     <label class="f">Spot fee per side (%)<input id="s_spotFee" type="number" min="0" max="0.5" step="0.01"></label>
     <label class="f">Ready score threshold<input id="s_ready" type="number" min="55" max="90" step="1"></label>
     <label class="f">Min indicators agreeing (of 20)<input id="s_minInd" type="number" min="5" max="20" step="1"></label>
+    <label class="f">Close demo trades when signal…<select id="s_exitMode"><option value="strict">leaves READY (watch, wait or gone)</option><option value="fade">reverses or drops to WAIT (holds through WATCH)</option><option value="off">never (only SL / TP / time)</option></select></label>
     <label class="f">Trade direction<select id="s_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
     <label class="f chk"><input id="s_futOnly" type="checkbox"> Only coins with futures</label>
     <label class="f chk"><input id="s_sound" type="checkbox"> Sound on new signal</label>
@@ -166,13 +169,13 @@ td button{padding:4px 10px;font-size:12px}
       <label class="f">Fee per side (%)<input id="d_fee" type="number" min="0" max="0.5" step="0.01"></label>
       <label class="f">Close trade after (min)<input id="d_maxHold" type="number" min="5" max="1440" step="5"></label>
       <label class="f chk"><input id="d_auto" type="checkbox"> Auto-take READY signals</label>
-      <div style="align-self:end"><button id="d_reset" type="button">Reset demo</button></div>
+      <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap"><button id="d_reset" type="button">Reset demo</button><button type="button" class="exportBtn">Export trades</button></div>
     </section>
     <section class="pulse" id="dstats"></section>
     <h2>Equity curve <small>Balance after every closed trade or partial take-profit. Dashed line = starting balance.</small></h2>
     <div class="eqbox"><canvas id="eq"></canvas></div>
     <h2>Open trades <small id="openNote"></small></h2>
-    <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Now</th><th>Stop</th><th>Next target</th><th>Size</th><th>P&amp;L</th><th>Open for</th><th></th></tr></thead><tbody id="dopen"></tbody></table></div>
+    <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Now</th><th>Stop</th><th>Next target</th><th>Size</th><th>P&amp;L</th><th>Signal now</th><th>Open for</th><th></th></tr></thead><tbody id="dopen"></tbody></table></div>
     <h2>Trade history <small id="histNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Fees</th><th>P&amp;L</th><th>R</th><th>Held</th></tr></thead><tbody id="dhist"></tbody></table></div>
     <p class="disclaimer">How the demo works: when a scan marks a coin READY, the demo opens a trade at the scan price, sized so the stop loss costs your risk % (set in Settings) of the demo balance. Prices are checked every 5 seconds. At TP1 it closes 50% and moves the stop to entry. At TP2 it closes another 30% and moves the stop to TP1. At TP3 it closes the rest. Trades still open after the time limit close at market. Fees are charged on every fill. Max 10× of balance per trade, one trade per coin, and a 15-minute pause on a coin after it closes. The demo only runs while this page is open, and it is saved in this browser. Real fills can be worse than these results because of slippage and very fast moves.</p>
@@ -191,14 +194,14 @@ td button{padding:4px 10px;font-size:12px}
       <label class="f">Close trade after (min)<input id="f_maxHold" type="number" min="5" max="1440" step="5"></label>
       <label class="f chk"><input id="f_bnb" type="checkbox"> Pay fees in BNB (−10%)</label>
       <label class="f chk"><input id="f_auto" type="checkbox"> Auto-take READY signals</label>
-      <div style="align-self:end"><button id="f_reset" type="button">Reset futures demo</button></div>
+      <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap"><button id="f_reset" type="button">Reset futures demo</button><button type="button" class="exportBtn">Export trades</button></div>
       <p class="sub" id="f_levNote" style="grid-column:1/-1;margin:0"></p>
     </section>
     <section class="pulse" id="fstats"></section>
     <h2>Equity curve <small>Wallet balance after every fill, fee and funding payment. Dashed line = starting balance.</small></h2>
     <div class="eqbox"><canvas id="eqF" style="width:100%;height:200px;display:block"></canvas></div>
     <h2>Open positions <small id="fopenNote"></small></h2>
-    <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Mark</th><th>Liq. price</th><th>Stop</th><th>Next target</th><th>Size</th><th>Margin</th><th>Unrealized</th><th>Funding</th><th>ROE (net)</th><th>Open for</th><th></th></tr></thead><tbody id="fopen"></tbody></table></div>
+    <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Mark</th><th>Liq. price</th><th>Stop</th><th>Next target</th><th>Size</th><th>Margin</th><th>Unrealized</th><th>Funding</th><th>ROE (net)</th><th>Signal now</th><th>Open for</th><th></th></tr></thead><tbody id="fopen"></tbody></table></div>
     <p class="sub" id="fskip"></p>
     <h2>Trade history <small id="fhistNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Gross</th><th>Fees</th><th>Funding</th><th>Net</th><th>ROE</th><th>R</th><th>Held</th></tr></thead><tbody id="fhist"></tbody></table></div>
@@ -253,13 +256,15 @@ td button{padding:4px 10px;font-size:12px}
 <div class="backdrop" id="backdrop" hidden></div>
 <aside class="drawer" id="drawer" hidden aria-label="Coin details"></aside>
 
+<script src="agent-core.js"></script>
 <script>
 'use strict';
 /* ---------- settings ---------- */
-const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,lev:10,spotFee:0.1,side:'BOTH',futOnly:false,sound:false,auto:true};
+const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,lev:10,spotFee:0.1,exitMode:'strict',side:'BOTH',futOnly:false,sound:false,auto:true};
 let S=Object.assign({},DEF);
 try{Object.assign(S,JSON.parse(localStorage.getItem('scalpRadarV1')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('scalpRadarV1',JSON.stringify(S))}catch(e){}}
+if(S.exitV!==2){S.exitMode='strict';S.exitV=2;save()}
 
 const $=s=>document.querySelector(s);
 const clamp=(x,a=-1,b=1)=>Math.max(a,Math.min(b,isFinite(x)?x:0));
@@ -595,7 +600,7 @@ let STATE={rows:[],fng:null,btc:null,last:0,scanning:false,readySet:new Set(),fi
 let nextAt=0;
 
 async function scan(){
-  if(STATE.scanning)return;STATE.scanning=true;$('#btnScan').disabled=true;
+  if(STATE.scanning)return;STATE.scanning=true;const scanStart=Date.now();$('#btnScan').disabled=true;
   setStatus('Connecting to Binance…');setProg(2);
   try{
     if(!SPOT)SPOT=await pickHost();
@@ -614,10 +619,10 @@ async function scan(){
     await loadFilters([...cands.map(t=>t.symbol),'BTCUSDT']);
     setStatus(`Analyzing BTC first, then ${cands.length} coins…`);
     const btc=await analyze('BTCUSDT',btcT,ctx);
-    ctx.btcBias=(btc.checks.find(c=>c.id==='trend1h').b*3+btc.checks.find(c=>c.id==='struct15').b*2.5+btc.checks.find(c=>c.id==='trend4h').b*2)/7.5;ctx.btc4h=btc.chg4h;
-    let done=0,errors=0;
+    ctx.btcBias=(btc.checks.find(c=>c.id==='trend1h').b*3+btc.checks.find(c=>c.id==='struct15').b*2.5+btc.checks.find(c=>c.id==='trend4h').b*2)/7.5;ctx.btc4h=btc.chg4h;STATE.btcBias=ctx.btcBias;
+    let done=0,errors=0;const failed=new Set();
     const res=await pool(cands,6,async t=>{
-      try{return await analyze(t.symbol,t,ctx)}catch(e){errors++;return null}
+      try{return await analyze(t.symbol,t,ctx)}catch(e){errors++;failed.add(t.symbol);return null}
       finally{done++;setProg(5+95*done/cands.length);if(done%5===0)setStatus(`Analyzed ${done} / ${cands.length} coins…`)}
     });
     STATE.rows=[btc,...res.filter(Boolean)];STATE.fng=fng;STATE.btc=btc;STATE.last=Date.now();STATE.errors=errors;STATE.total=all.length;
@@ -625,9 +630,12 @@ async function scan(){
     const fresh=[...ready].filter(x=>!STATE.readySet.has(x));
     if(fresh.length&&S.sound&&STATE.readySet.size+1)beep();
     STATE.readySet=ready;
+    STATE.scanStart=scanStart;STATE.failed=failed;
+    const closedN=await signalExits();
     render();
-    demoAfterScan();renderDemo();futAfterScan();
-    setStatus(`Last scan ${new Date().toLocaleTimeString()} · ${STATE.rows.length} coins analyzed${errors?` · ${errors} skipped (rate limit or no data)`:''} · source ${SPOT.replace('https://','')}`);
+    demoAfterScan();renderDemo();futAfterScan();renderFut();
+    runAutopilot();
+    setStatus(`Last scan ${new Date().toLocaleTimeString()} · ${STATE.rows.length} coins analyzed${errors?` · ${errors} skipped (rate limit or no data)`:''} · source ${SPOT.replace('https://','')}${closedN?` · ${closedN} demo trade${closedN>1?'s':''} closed: signal gone`:''}`);
   }catch(e){
     setStatus(e.message||'Scan failed',true);
   }finally{
@@ -735,7 +743,7 @@ function cardHTML(r,watch){
     ${levelsHTML(r)}
     ${cardOrderHTML(r)}
     <ul class="reasons">${reasonsFor(r).map(c=>`<li>${c.label}: ${c.text}</li>`).join('')}</ul>
-    <div class="tags">${D.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In spot demo</span>':''}${F.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In futures demo</span>':''}${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>
+    <div class="tags">${D.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In spot demo</span>':''}${F.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In futures demo</span>':''}${agentBlocked(r)?`<span class="tag warn">Agent: ${agentBlocked(r).replace(/ \(.*\)| by Trade Agent/g,'').toLowerCase()}</span>`:''}${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>
   </article>`;
 }
 function render(){
@@ -828,12 +836,19 @@ const sgn=p=>p.dir==='LONG'?1:-1;
 const unreal=p=>sgn(p)*(p.last-p.entry)*p.left;
 const equity=()=>D.bal+sum(D.open.map(unreal));
 
+/* ---------- Trade Agent link: entry snapshots, blocks, commands ---------- */
+function snap(r){const n=new Date();return{score:r.score,ind:r.indAgree,agree:r.agree,against:r.against,rsi:+r.rsi5.toFixed(1),atr:+r.atrPct.toFixed(3),volX:+r.volX.toFixed(2),
+  whale:r.wn?Math.sign(r.whaleNet):0,fund:r.funding,btc:STATE.btcBias==null?null:+STATE.btcBias.toFixed(2),rank:r.rank,chg:+r.chg.toFixed(2),tags:r.tags.map(t=>t[0]),hour:n.getHours(),dow:n.getDay()}}
+function agentBlocked(r){if((S.block||[]).includes(r.base))return'Blocked by Trade Agent';if((S.badHours||[]).includes(new Date().getHours()))return'Paused hour (Trade Agent)';
+  if(S.btcFilter&&r.sym!=='BTCUSDT'&&STATE.btcBias!=null&&((r.dir==='LONG'&&STATE.btcBias<-0.3)||(r.dir==='SHORT'&&STATE.btcBias>0.3)))return'Against BTC trend (agent rule)';
+  if(S.minAtr&&r.atrPct<S.minAtr)return'Too quiet to scalp (agent rule)';return null}
 function demoOpen(r){
+  if(agentBlocked(r))return false;
   if(D.open.some(p=>p.sym===r.sym)||D.open.length>=D.cfg.maxOpen||(D.cool[r.sym]||0)>Date.now())return false;
   const dist=Math.abs(r.entry-r.sl);if(!(dist>0)||D.bal<=0)return false;
   let qty=D.bal*S.risk/100/dist;const cap=D.bal*10;if(qty*r.entry>cap)qty=cap/r.entry;
   const fee=qty*r.entry*D.cfg.fee/100;
-  D.open.push({id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,entry:r.entry,sl:r.sl,sl0:r.sl,tp:r.tp.slice(),qty,left:qty,
+  D.open.push({ctx:snap(r),id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,entry:r.entry,sl:r.sl,sl0:r.sl,tp:r.tp.slice(),qty,left:qty,
     openAt:Date.now(),score:r.score,realized:-fee,fees:fee,hit:0,last:r.entry,exits:[]});
   D.bal-=fee;return true;
 }
@@ -847,7 +862,7 @@ function finish(p,why){
   D.open=D.open.filter(x=>x!==p);
   const exitAvg=sum(p.exits.map(e=>e.q*e.price))/p.qty,riskUsd=Math.abs(p.entry-p.sl0)*p.qty;
   const best=p.exits.some(e=>/^TP/.test(e.why))?p.exits.filter(e=>/^TP/.test(e.why)).map(e=>e.why).pop():null;
-  D.closed.unshift({sym:p.sym,base:p.base,dir:p.dir,entry:p.entry,exitAvg,openAt:p.openAt,closeAt:Date.now(),why:best&&why!==best?best+' → '+why:why,pnl:p.realized,fees:p.fees,R:riskUsd?p.realized/riskUsd:0});
+  D.closed.unshift({sym:p.sym,base:p.base,dir:p.dir,entry:p.entry,exitAvg,openAt:p.openAt,closeAt:Date.now(),why:best&&why!==best?best+' → '+why:why,pnl:p.realized,fees:p.fees,R:riskUsd?p.realized/riskUsd:0,score:p.score,ctx:p.ctx});
   if(D.closed.length>1000)D.closed.length=1000;
   D.cool[p.sym]=Date.now()+15*60e3;
 }
@@ -905,9 +920,9 @@ function renderDemo(){
     return `<tr><td><b>${p.base}</b> <span class="mut">${p.score}</span></td><td><span class="pill ${p.dir}">${p.dir}</span></td><td>${fp(p.entry)}</td><td>${fp(p.last)}</td>
     <td class="slc">${fp(p.sl)}${p.hit?` <span class="mut">${p.hit===1?'BE':'locked'}</span>`:''}</td><td class="tpc">${next?fp(next)+' <span class="mut">TP'+(p.hit+1)+'</span>':'—'}</td>
     <td>${fu(p.left*p.last)} <span class="mut">${(p.left/p.qty*100).toFixed(0)}%</span></td>
-    <td><span class="${cls(u+p.realized)}">${smoney(u+p.realized)}</span> <span class="mut">${pct(isFinite(up)?up:0)}</span></td><td>${dur(Date.now()-p.openAt)}</td>
+    <td><span class="${cls(u+p.realized)}">${smoney(u+p.realized)}</span> <span class="mut">${pct(isFinite(up)?up:0)}</span></td><td>${signalNow(p)}</td><td>${dur(Date.now()-p.openAt)}</td>
     <td><button type="button" data-close="${p.id}">Close</button></td></tr>`}).join('')
-    :`<tr><td colspan="10" class="mut" style="text-align:left">No open trades. ${D.cfg.auto?'The demo opens a trade automatically on the next READY signal.':'Turn on “Auto-take READY signals” to start.'}</td></tr>`;
+    :`<tr><td colspan="11" class="mut" style="text-align:left">No open trades. ${D.cfg.auto?'The demo opens a trade automatically on the next READY signal.':'Turn on “Auto-take READY signals” to start.'}</td></tr>`;
   $('#histNote').textContent=C.length?`${C.length} closed trades since ${new Date(D.since).toLocaleDateString()}`:'';
   $('#dhist').innerHTML=C.length?C.slice(0,200).map(t=>`<tr><td class="mut">${new Date(t.closeAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
     <td><b>${t.base}</b></td><td><span class="pill ${t.dir}">${t.dir}</span></td><td>${fp(t.entry)}</td><td>${fp(t.exitAvg)}</td>
@@ -974,6 +989,7 @@ function fskip(r,why){F.skipped.unshift({t:Date.now(),base:r.base,dir:r.dir,why}
 function futOpen(r){
   const c=F.cfg;
   if(!r.hasFut||F.open.some(p=>p.sym===r.sym)||F.open.length>=c.maxOpen||(F.cool[r.sym]||0)>Date.now())return false;
+  const ab=agentBlocked(r);if(ab){if(!F.skipped.some(x=>x.base===r.base&&Date.now()-x.t<36e5))fskip(r,ab);return false}
   const bid=FX.bid[r.sym],ask=FX.ask[r.sym];if(!bid||!ask)return false;
   const s=r.dir==='LONG'?1:-1,mid=(bid+ask)/2,ideal=s>0?ask:bid,fill=ideal*(1+s*c.slip/100);
   const dist=Math.abs(r.entry-r.sl)/r.entry*fill;
@@ -988,7 +1004,7 @@ function futOpen(r){
   if(qty*fill<5){fskip(r,'Not enough free margin for the $5 minimum order');return false}
   const notional=qty*fill,margin=notional/lev,fee=notional*fr;
   F.bal-=fee;
-  F.open.push({id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,lev,mmr,entry:fill,sl,sl0:sl,tp,liq,qty,left:qty,margin,
+  F.open.push({ctx:snap(r),id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,lev,mmr,entry:fill,sl,sl0:sl,tp,liq,qty,left:qty,margin,
     openAt:Date.now(),score:r.score,fees:fee,funding:0,gross:0,slip:Math.abs(fill-mid)*qty,hit:0,mark:FX.mark[r.sym]||fill,mid,
     nextFund:FX.next[r.sym]||0,capped,exits:[]});
   F.curve.push({t:Date.now(),b:F.bal});
@@ -1010,7 +1026,7 @@ function futFinish(p,why){
   const tps=p.exits.filter(e=>/^TP/.test(e.why)).map(e=>e.why),best=tps.length?tps[tps.length-1]:null;
   F.closed.unshift({sym:p.sym,base:p.base,dir:p.dir,lev:p.lev,entry:p.entry,exitAvg:sum(p.exits.map(e=>e.q*e.price))/p.qty,
     openAt:p.openAt,closeAt:Date.now(),why:best&&why!==best?best+' → '+why:why,gross:p.gross,fees:p.fees,funding:p.funding,slip:p.slip,
-    net,margin:p.margin,roe:net/p.margin*100,R:riskUsd?net/riskUsd:0,notional:p.qty*p.entry});
+    net,margin:p.margin,roe:net/p.margin*100,R:riskUsd?net/riskUsd:0,notional:p.qty*p.entry,score:p.score,ctx:p.ctx});
   if(F.closed.length>1000)F.closed.length=1000;
   F.cool[p.sym]=Date.now()+15*60e3;
 }
@@ -1074,9 +1090,9 @@ function renderFut(){
     <td class="slc">${fp(p.sl)}${p.hit?` <span class="mut">${p.hit===1?'BE':'locked'}</span>`:''}</td><td class="tpc">${next?fp(next)+' <span class="mut">TP'+(p.hit+1)+'</span>':'—'}</td>
     <td>${fu(p.left*p.mark)}${p.capped?' <span class="tag warn">capped</span>':''}</td><td>${money(m)}</td>
     <td><span class="${cls(u)}">${smoney(u)}</span></td><td class="${cls(p.funding)}">${p.funding?smoney(p.funding):'—'}</td>
-    <td><span class="${cls(roe)}">${pct(roe,1)}</span></td><td>${dur(Date.now()-p.openAt)}</td>
+    <td><span class="${cls(roe)}">${pct(roe,1)}</span></td><td>${signalNow(p)}</td><td>${dur(Date.now()-p.openAt)}</td>
     <td><button type="button" data-fclose="${p.id}">Close</button></td></tr>`}).join('')
-    :`<tr><td colspan="14" class="mut" style="text-align:left">No open futures positions. ${F.cfg.auto?'Every READY signal on a coin with futures opens here automatically.':'Turn on “Auto-take READY signals” to start.'}</td></tr>`;
+    :`<tr><td colspan="15" class="mut" style="text-align:left">No open futures positions. ${F.cfg.auto?'Every READY signal on a coin with futures opens here automatically.':'Turn on “Auto-take READY signals” to start.'}</td></tr>`;
   $('#fskip').innerHTML=F.skipped.length?'<b>Skipped signals:</b> '+F.skipped.slice(0,5).map(x=>`${x.base} ${x.dir.toLowerCase()} (${x.why})`).join(' · '):'';
   $('#fhistNote').textContent=C.length?`${C.length} closed trades since ${new Date(F.since).toLocaleDateString()}`:'';
   $('#fhist').innerHTML=C.length?C.slice(0,200).map(t=>`<tr><td class="mut">${new Date(t.closeAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
@@ -1105,12 +1121,42 @@ $('#fopen').addEventListener('click',async e=>{const b=e.target.closest('[data-f
   futFill(p,p.left,(s>0?bid:ask)*(1-s*F.cfg.slip/100),'Manual close',false,(bid+ask)/2);fsave();renderFut()});
 setInterval(futPoll,5000);
 
+/* ---------- close demo trades when the signal disappears ---------- */
+function signalLost(p){
+  if(!STATE.scanStart||p.openAt>=STATE.scanStart)return null;
+  const r=STATE.rows.find(x=>x.sym===p.sym);
+  if(!r)return S.exitMode==='strict'&&!(STATE.failed&&STATE.failed.has(p.sym))?'Dropped from scanner':null;
+  if(r.dir!==p.dir&&r.score>=55)return'Signal reversed';
+  if(S.exitMode==='strict')return r.signal==='READY'&&r.dir===p.dir?null:(r.signal==='WATCH'?'Signal moved to WATCH':'Signal moved to WAIT');
+  if(r.signal==='WAIT')return'Signal faded';
+  return null;
+}
+function signalNow(p){const r=STATE.rows.find(x=>x.sym===p.sym);if(!r)return'<span class="mut">not scanned</span>';
+  return `<span class="pill ${r.signal} ${r.dir}">${r.signal==='WAIT'?'WAIT':r.signal+' '+r.dir}</span>`}
+async function signalExits(){
+  if(S.exitMode==='off')return 0;let n=0;
+  const ds=D.open.filter(p=>signalLost(p));
+  if(ds.length){const px={};for(const p of ds){const r=STATE.rows.find(x=>x.sym===p.sym);if(r)px[p.sym]=r.price}
+    const miss=ds.filter(p=>!px[p.sym]).map(p=>p.sym);
+    if(miss.length){try{const j=await getJSON(SPOT+'/api/v3/ticker/price?symbols='+encodeURIComponent(JSON.stringify(miss)),8000);for(const x of j)px[x.symbol]=+x.price}catch(e){}}
+    for(const p of ds){const price=px[p.sym]||p.last;p.last=price;fill(p,p.left,price,signalLost(p));n++}}
+  const fl=F.open.filter(p=>signalLost(p));
+  if(fl.length){try{await futPrices()}catch(e){}
+    for(const p of fl){const why=signalLost(p),s=sgn(p),r=STATE.rows.find(x=>x.sym===p.sym);
+      let bid=FX.bid[p.sym],ask=FX.ask[p.sym];if(!bid||!ask){const m=FX.mark[p.sym]||p.mark||(r&&r.price);bid=ask=m}
+      if(!bid)continue;
+      futFill(p,p.left,(s>0?bid:ask)*(1-s*F.cfg.slip/100),why,false,(bid+ask)/2);n++}}
+  if(n){dsave();fsave()}
+  return n;
+}
+
 /* ---------- wiring ---------- */
 const ids=['minVol','deep','refresh','account','risk','ready','minInd','lev','spotFee'];
-function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
+function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_exitMode').value=S.exitMode;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
 ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk','lev','spotFee'].includes(k)&&STATE.rows.length){render();if(STATE.open&&!$('#drawer').hidden)openDrawer(STATE.open)}}}));
 $('#s_futOnly').addEventListener('change',e=>{S.futOnly=e.target.checked;save()});
 $('#s_side').addEventListener('change',e=>{S.side=e.target.value;save();scan()});
+$('#s_exitMode').addEventListener('change',e=>{S.exitMode=e.target.value;save()});
 $('#s_sound').addEventListener('change',e=>{S.sound=e.target.checked;save();if(S.sound)beep()});
 $('#btnSettings').onclick=()=>{const s=$('#settings');s.hidden=!s.hidden;$('#btnSettings').setAttribute('aria-expanded',String(!s.hidden))};
 $('#btnAuto').onclick=()=>{S.auto=!S.auto;save();loadForm();nextAt=Date.now()+S.refresh*60e3};
@@ -1133,11 +1179,30 @@ setInterval(()=>{
   $('#p_next').textContent=STATE.scanning?'scanning':`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
   if(s===0&&!STATE.scanning)scan();
 },1000);
+function runAutopilot(){if(!window.AgentCore)return;let r;try{r=AgentCore.autopilotStep({S,D,F,now:Date.now()})}catch(e){console.warn('autopilot',e);return}
+  if(r.changed){save();dsave();fsave();loadForm();loadDemoForm();loadFutForm();if(STATE.rows.length)render();renderDemo();renderFut()}
+  if(r.notes.length)setTimeout(()=>setStatus('Agent autopilot: '+r.notes.join(' · ')),50);
+  apBadge()}
+function apBadge(){const el=$('#apBadge');if(!el)return;if(!window.AgentCore){el.textContent='Agent offline';el.title='agent-core.js not found next to this page';return}
+  const m=AgentCore.loadMem(),t=m.lessons.filter(l=>l.status==='testing').length;el.innerHTML=`<span class="live ${m.autopilot?'':'off'}"></span>Autopilot ${m.autopilot?'on':'off'}${t?` · ${t} testing`:''}`}
+const CMDKEY='scalpRadarAgentCmd';
+function applyAgentCmd(){let c=null;try{c=JSON.parse(localStorage.getItem(CMDKEY)||'null')}catch(e){}
+  if(!c||!c.id||c.id===S.agentCmdId)return;
+  if(c.S)Object.assign(S,c.S);if(c.spot)Object.assign(D.cfg,c.spot);if(c.fut)Object.assign(F.cfg,c.fut);
+  S.agentCmdId=c.id;save();dsave();fsave();loadForm();loadDemoForm();loadFutForm();if(STATE.rows.length)render();renderDemo();renderFut();
+  setStatus(`Trade Agent applied: ${c.summary||'new settings'}`)}
+window.addEventListener('storage',e=>{if(e.key===CMDKEY)applyAgentCmd();if(e.key==='scalpRadarAgentMem')apBadge()});
+document.querySelectorAll('.exportBtn').forEach(b=>b.addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify({app:'ScalpRadar',v:1,at:Date.now(),settings:S,spot:D,fut:F})],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='scalp-radar-trades-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}));
 loadForm();
 loadDemoForm();
 renderDemo();
 loadFutForm();
 renderFut();
+applyAgentCmd();
+apBadge();
 scan();
 </script>
 </body>
