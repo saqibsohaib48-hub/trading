@@ -144,6 +144,7 @@ td button{padding:4px 10px;font-size:12px}
     <label class="f">Risk per trade (%)<input id="s_risk" type="number" min="0.1" max="5" step="0.1"></label>
     <label class="f">Ready score threshold<input id="s_ready" type="number" min="55" max="90" step="1"></label>
     <label class="f">Min indicators agreeing (of 20)<input id="s_minInd" type="number" min="5" max="20" step="1"></label>
+    <label class="f">Trade direction<select id="s_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
     <label class="f chk"><input id="s_futOnly" type="checkbox"> Only coins with futures</label>
     <label class="f chk"><input id="s_sound" type="checkbox"> Sound on new signal</label>
   </section>
@@ -177,6 +178,7 @@ td button{padding:4px 10px;font-size:12px}
     <div><div class="k">BTC · 1h trend</div><div class="v" id="p_btc">—</div><div class="sub" id="p_btc2">waiting for scan</div></div>
     <div><div class="k">Fear &amp; Greed</div><div class="v" id="p_fng">—</div><div class="sub" id="p_fng2">alternative.me</div></div>
     <div><div class="k">Coins scanned</div><div class="v" id="p_cnt">—</div><div class="sub" id="p_cnt2">of all USDT pairs</div></div>
+    <div><div class="k">Market bias</div><div class="v" id="p_bias">—</div><div class="sub" id="p_bias2">coins leaning long vs short</div></div>
     <div><div class="k">Ready · Long</div><div class="v up" id="p_long">—</div><div class="sub">all checks passed</div></div>
     <div><div class="k">Ready · Short</div><div class="v dn" id="p_short">—</div><div class="sub">all checks passed</div></div>
     <div><div class="k">Next scan</div><div class="v" id="p_next">—</div><div class="sub" id="p_last">no scan yet</div></div>
@@ -208,7 +210,7 @@ td button{padding:4px 10px;font-size:12px}
       <li><b>Context (1):</b> Fear &amp; Greed. Market-cap rank and CoinGecko trending appear as tags.</li>
     </ul>
     <p><b>20-indicator confirmation:</b> EMA 9/21/50, RSI, MACD, Supertrend, VWAP, Bollinger Bands, ATR, ADX, Stochastic, Ichimoku Cloud, Fibonacci retracement, Parabolic SAR, SMA 50/200, Stochastic RSI, CCI, OBV, Donchian Channels, Keltner Channels, daily Pivot Points and Williams %R. Each votes BUY, SELL or NEUTRAL, mostly on the 15m chart (Ichimoku, Fibonacci and SMA on 1h, Pivots on the daily). They confirm the score rather than adding to it, so the same signal isn't counted twice.</p>
-    <p><b>READY</b> needs a score at or above your threshold (default 70) and must pass all 8 safety gates: volatility in a tradable range, RSI not stretched, tight spread, volume or whales confirming, room to reach TP1 before the 24h high/low, not overextended on the day (±30%), enough order book liquidity, and enough of the 20 confirmation indicators agreeing. A high score that fails a gate shows as <b>WATCH</b>.</p>
+    <p><b>READY</b> needs a score at or above your threshold (default 70) and must pass all 9 safety gates: volatility in a tradable range, RSI not stretched, tight spread, volume or whales confirming, room to reach TP1 before the 24h high/low, not overextended on the day (±30%), enough order book liquidity, enough of the 20 confirmation indicators agreeing, and for shorts, the coin must have Binance futures (spot-only coins can't be shorted). A high score that fails a gate shows as <b>WATCH</b>.</p>
     <p><b>Levels:</b> stop loss sits beyond the recent 1-hour swing on the 5m chart, limited to 0.5–2.5× ATR. Targets are 1R, 2R and 3R. A common way to manage it: take part profit at TP1 and move the stop to entry.</p>
     <p><b>Position size</b> uses your account size and risk %, so hitting the stop loses only that percentage.</p>
   </details>
@@ -222,7 +224,7 @@ td button{padding:4px 10px;font-size:12px}
 <script>
 'use strict';
 /* ---------- settings ---------- */
-const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,futOnly:false,sound:false,auto:true};
+const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,side:'BOTH',futOnly:false,sound:false,auto:true};
 let S=Object.assign({},DEF);
 try{Object.assign(S,JSON.parse(localStorage.getItem('scalpRadarV1')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('scalpRadarV1',JSON.stringify(S))}catch(e){}}
@@ -268,7 +270,7 @@ function rsiArr(c,p=14){const out=new Array(c.length).fill(50);if(c.length<p+2)r
 function stochRsi(c){const r=rsiArr(c),n=c.length;const st=r.map((v,i)=>{if(i<28)return 50;const w=r.slice(i-13,i+1),lo=Math.min(...w),hi=Math.max(...w);return hi===lo?50:(v-lo)/(hi-lo)*100});
   const k=i=>avg(st.slice(i-2,i+1));const K=[k(n-3),k(n-2),k(n-1)];return{k:K[2],kp:K[1],d:avg(K)}}
 function supertrend(h,l,c,p=10,m=3){const n=c.length,tr=[0];for(let i=1;i<n;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));
-  let a=avg(tr.slice(1,p+1)),up=0,dn=0,dir=1;
+  let a=avg(tr.slice(1,p+1)),up=0,dn=0,dir=c[p]>=c[0]?1:-1;
   for(let i=p+1;i<n;i++){a=(a*(p-1)+tr[i])/p;const mid=(h[i]+l[i])/2,bu=mid+m*a,bl=mid-m*a;
     if(i===p+1){up=bu;dn=bl}else{up=(bu<up||c[i-1]>up)?bu:up;dn=(bl>dn||c[i-1]<dn)?bl:dn}
     if(dir===1&&c[i]<dn)dir=-1;else if(dir===-1&&c[i]>up)dir=1}
@@ -402,7 +404,7 @@ async function analyze(sym,tk,ctx){
   const hasFut=ctx.fund[sym]!==undefined;
   let oi=null,ls=null,ftk=null,top=null;
   if(hasFut){const F=(p,lim)=>getJSON(`${FAPI}/futures/data/${p}?symbol=${sym}&period=5m&limit=${lim}`,8000).catch(()=>null);
-    [oi,ls,ftk,top]=await Promise.all([F('openInterestHist',13),F('globalLongShortAccountRatio',1),F('takerlongshortRatio',6),F('topLongShortPositionRatio',1)])}
+    [oi,ls,ftk,top]=await Promise.all([F('openInterestHist',13),F('globalLongShortAccountRatio',13),F('takerlongshortRatio',6),F('topLongShortPositionRatio',13)])}
 
   const k5=K(r5),k15=K(r15),k1=K(r1h),k4=K(r4h);
   const n=k5.c.length,price=k5.c[n-1],n15=k15.c.length,n1=k1.c.length,n4=k4.c.length;
@@ -432,9 +434,11 @@ async function analyze(sym,tk,ctx){
   d.whaleNet=d.wb-d.ws;
   d.funding=hasFut?ctx.fund[sym]:null;d.oiChg=null;d.ls=null;d.ftk=null;d.top=null;
   if(oi&&oi.length>2){const a=+oi[0].sumOpenInterestValue,b=+oi[oi.length-1].sumOpenInterestValue;d.oiChg=a?(b-a)/a*100:null}
-  if(ls&&ls.length)d.ls=+ls[0].longShortRatio;
+  const lchg=a=>a&&a.length>2?Math.log(+a[a.length-1].longShortRatio/+a[0].longShortRatio)*100:null;
+  if(ls&&ls.length){d.ls=+ls[ls.length-1].longShortRatio;d.lsChg=lchg(ls)}
+  if(top&&top.length){d.topChg=lchg(top)}
   if(ftk&&ftk.length)d.ftk=avg(ftk.map(x=>+x.buySellRatio));
-  if(top&&top.length)d.top=+top[0].longShortRatio;
+  if(top&&top.length)d.top=+top[top.length-1].longShortRatio;
   const priceChg1h=(price-k5.c[n-13])/k5.c[n-13]*100;
   const cg=CG.map[d.base];d.rank=cg?cg.rank:null;d.name=cg?cg.name:'';d.trending=CG.trending.has(d.base);
 
@@ -497,7 +501,7 @@ async function analyze(sym,tk,ctx){
   const wt=d.wb+d.ws;
   add('whale','Whales','Whale trades',2.5,wt?clamp((d.wb-d.ws)/wt*Math.min(1,d.wn/3)):0,
       d.wn?`${d.wn} trades ≥ ${fu(d.whaleThr)} in last ${Math.max(1,Math.round(d.wmins))} min · buys ${fu(d.wb)} / sells ${fu(d.ws)}`:`No trades ≥ ${fu(d.whaleThr)} in last ${Math.max(1,Math.round(d.wmins))} min`);
-  if(d.top!==null)add('top','Whales','Top traders positions',1,d.top>1.3?0.6:d.top<0.77?-0.6:clamp((d.top-1)*1.5),`Biggest Binance futures accounts are ${(d.top/(1+d.top)*100).toFixed(0)}% long`);
+  if(d.top!==null&&d.topChg!=null)add('top','Whales','Top traders positions',1,clamp(d.topChg/6),`Biggest futures accounts ${(d.top/(1+d.top)*100).toFixed(0)}% long, ${d.topChg>=0?'adding longs':'adding shorts'} (${pct(d.topChg,1)} in 1h)`);
   // FUTURES
   if(hasFut){
     const f=d.funding,fb=f>0.0005?-0.7:f<-0.0003?0.7:0;
@@ -505,7 +509,7 @@ async function analyze(sym,tk,ctx){
     if(d.oiChg!==null){const ob2=d.oiChg>1.5?Math.sign(priceChg1h):d.oiChg<-1.5?-0.3*Math.sign(priceChg1h):0;
       add('oi','Futures','Open interest 1h',1,ob2,`OI ${pct(d.oiChg)} while price ${pct(priceChg1h)}${ob2===0?'':d.oiChg>0?' · new money joining the move':' · positions closing'}`)}
     if(d.ftk!==null)add('ftaker','Futures','Futures taker buy/sell',1,clamp((d.ftk-1)*4),`Buy/sell volume ratio ${d.ftk.toFixed(2)} over 30 min`);
-    if(d.ls!==null)add('ls','Futures','Retail long/short (contrarian)',0.5,d.ls>2.5?-0.6:d.ls<0.8?0.6:0,`Ratio ${d.ls.toFixed(2)}${d.ls>2.5?' · crowd heavily long':d.ls<0.8?' · crowd heavily short':''}`);
+    if(d.ls!==null&&d.lsChg!=null)add('ls','Futures','Retail long/short (contrarian)',0.5,clamp(-d.lsChg/8)*0.6,`Ratio ${d.ls.toFixed(2)}, ${pct(d.lsChg,1)} in 1h${d.lsChg>4?' · retail piling into longs':d.lsChg<-4?' · retail piling into shorts':''}`);
   }
   if(ctx.fng)add('fng','Context','Fear & Greed',0.5,ctx.fng.v>78?-0.4:ctx.fng.v<22?0.4:0,`${ctx.fng.v} · ${ctx.fng.t}`);
 
@@ -537,8 +541,9 @@ async function analyze(sym,tk,ctx){
   gate('Room to TP1',room>=risk,room===Infinity?(s>0?'Price is above the 24h high, no resistance overhead':'Price is below the 24h low, no support underneath'):`${s>0?'24h high':'24h low'} ${fp(s>0?res:sup)} is ${(room/risk).toFixed(1)}R away (needs 1R)`);
   gate('Not overextended',s>0?d.chg<=30:d.chg>=-30,`24h change ${pct(d.chg)} (limit ±30% in trade direction)`);
   gate('Enough liquidity',Math.min(bidD,askD)>=30000,`Depth within 1%: bids ${fu(bidD)}, asks ${fu(askD)} (min $30K each)`);
+  gate('Shortable',s>0||hasFut,s>0?'Long trade, not needed':hasFut?'Coin has Binance futures, short is possible':'Spot-only coin, shorting needs futures');
   gate('Indicators confirm',d.indAgree>=S.minInd,`${d.indAgree} of 20 indicators agree with ${d.dir.toLowerCase()}, ${d.indAgainst} against (needs ${S.minInd})`);
-  d.gates=G;const WL={'Volatility in range':d.atrPct<0.12?'Too quiet to scalp':'Volatility too high','RSI not stretched':s>0?'RSI overbought':'RSI oversold','Tight spread':'Wide spread','Volume or whales confirm':'No volume/whale confirmation','Room to TP1':s>0?'Resistance before TP1':'Support before TP1','Not overextended':'Overextended 24h','Enough liquidity':'Thin order book','Indicators confirm':`Only ${d.indAgree}/20 indicators agree`};d.warn=G.filter(g=>!g.pass).map(g=>WL[g.label]||g.label);
+  d.gates=G;const WL={'Volatility in range':d.atrPct<0.12?'Too quiet to scalp':'Volatility too high','RSI not stretched':s>0?'RSI overbought':'RSI oversold','Tight spread':'Wide spread','Volume or whales confirm':'No volume/whale confirmation','Room to TP1':s>0?'Resistance before TP1':'Support before TP1','Not overextended':'Overextended 24h','Enough liquidity':'Thin order book','Indicators confirm':`Only ${d.indAgree}/20 indicators agree`,'Shortable':'Spot only, can\'t short'};d.warn=G.filter(g=>!g.pass).map(g=>WL[g.label]||g.label);
 
   d.tags=[];
   if(d.trending)d.tags.push(['Trending','hot']);
@@ -549,6 +554,7 @@ async function analyze(sym,tk,ctx){
   if(bo.width<bo.avgW*0.7)d.tags.push(['Squeeze','hot']);
 
   d.signal=d.score>=S.ready&&!d.warn.length?'READY':d.score>=Math.min(S.ready-8,62)?'WATCH':'WAIT';
+  if(S.side!=='BOTH'&&S.side!==d.dir){if(d.signal==='READY')d.signal='WATCH';d.warn.push(S.side==='LONG'?'Long-only mode':'Short-only mode')}
   return d;
 }
 
@@ -629,7 +635,8 @@ function render(){
   const rows=STATE.rows,btc=STATE.btc;
   if(btc){const b=btc.checks.find(c=>c.id==='trend1h').b;$('#p_btc').innerHTML=`<span class="${cls(b)}">${b>0.5?'Up':b<-0.5?'Down':'Mixed'}</span>`;$('#p_btc2').textContent=`$${fp(btc.price)} · 24h ${pct(btc.chg)}`}
   if(STATE.fng){const v=STATE.fng.v;$('#p_fng').innerHTML=`<span class="${v>55?'up':v<45?'dn':''}">${v}</span>`;$('#p_fng2').textContent=STATE.fng.t}
-  $('#p_cnt').textContent=rows.length;$('#p_cnt2').textContent=`of ${STATE.total||'—'} USDT pairs`;
+  $('#p_cnt').textContent=rows.length;
+  const nl=rows.filter(r=>r.dir==='LONG').length,ns=rows.length-nl;$('#p_bias').innerHTML=`<span class="up">${nl}</span> / <span class="dn">${ns}</span>`;$('#p_bias2').textContent=nl>ns*1.5?'Market leaning long: shorts are rare':ns>nl*1.5?'Market leaning short: longs are rare':'Mixed market: both sides possible';$('#p_cnt2').textContent=`of ${STATE.total||'—'} USDT pairs`;
   const ready=rows.filter(r=>r.signal==='READY').sort((a,b)=>b.score-a.score);
   $('#p_long').textContent=ready.filter(r=>r.dir==='LONG').length;$('#p_short').textContent=ready.filter(r=>r.dir==='SHORT').length;
   $('#p_last').textContent='last '+new Date(STATE.last).toLocaleTimeString();
@@ -841,9 +848,10 @@ setInterval(pollPrices,5000);
 
 /* ---------- wiring ---------- */
 const ids=['minVol','deep','refresh','account','risk','ready','minInd'];
-function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
+function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
 ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk'].includes(k)&&STATE.rows.length)render()}}));
 $('#s_futOnly').addEventListener('change',e=>{S.futOnly=e.target.checked;save()});
+$('#s_side').addEventListener('change',e=>{S.side=e.target.value;save();scan()});
 $('#s_sound').addEventListener('change',e=>{S.sound=e.target.checked;save();if(S.sound)beep()});
 $('#btnSettings').onclick=()=>{const s=$('#settings');s.hidden=!s.hidden;$('#btnSettings').setAttribute('aria-expanded',String(!s.hidden))};
 $('#btnAuto').onclick=()=>{S.auto=!S.auto;save();loadForm();nextAt=Date.now()+S.refresh*60e3};
