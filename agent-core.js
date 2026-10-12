@@ -92,7 +92,7 @@ function mistakeReport(T,set){const losers=[],counts={};
 const IND_NAMES={supertrend:'Supertrend',ichimoku:'Ichimoku Cloud',rsi:'RSI',macd:'MACD',vwap:'VWAP',adx:'ADX / DMI',bb:'Bollinger Bands',stochrsi:'Stochastic RSI',ema:'EMA 9/21/50/200',vp:'Volume Profile',atr:'ATR',psar:'Parabolic SAR',cci:'CCI',wr:'Williams %R',keltner:'Keltner Channels',donchian:'Donchian Channels',hma:'Hull Moving Average',avgvol:'Average Volume',pivots:'Pivot Points Standard',obv:'On-Balance Volume',utbot:'UT Bot Alerts',alpha:'AlphaTrend',half:'HalfTrend',qqe:'QQE MOD',wave:'WaveTrend Oscillator',ssl:'SSL Hybrid',pressure:'Buy/Sell Volume Pressure',tvr:'TradingView Technical Ratings',lorentz:'Lorentzian Classification'};
 function indicatorStats(T){return Object.keys(IND_NAMES).map((id,k)=>{let n=0,w=0,net=0,an=0,aw=0;
   for(const t of T){const v=t.iv?t.iv[id]:0;if(!v)continue;const s=t.dir==='LONG'?1:-1;if(v===s){n++;net+=t.net;if(t.net>0)w++}else{an++;if(t.net>0)aw++}}
-  const wr=n?w/n*100:null;return{id,name:IND_NAMES[id],order:k,n,wins:w,wr,net,an,awr:an?aw/an*100:null,w:n>=10?Math.max(0.25,Math.min(2,0.25+(wr-35)/20)):1}})
+  const wr=n?w/n*100:null,wrS=(w+5)/(n+10)*100;return{id,name:IND_NAMES[id],order:k,n,wins:w,wr,net,an,awr:an?aw/an*100:null,w:n>=20?Math.max(0.25,Math.min(2,0.25+(wrS-35)/20)):1}})
   .sort((a,b)=>((b.n>=5?b.wr:50)-(a.n>=5?a.wr:50))||a.order-b.order)}
 
 /* ---------- findings (each one is a lesson the agent could learn) ---------- */
@@ -210,6 +210,6 @@ function autopilotStep(ctx){
   saveMem(mem);return{changed,notes,mem};
 }
 
-window.AgentCore={VERSION:7,indicatorStats,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
+window.AgentCore={VERSION:8,indicatorStats,KEYS,DEFS,AUTO,sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,getLS,setLS,settingsView,norm,tradesFrom,learnMode,stats,drawdown,confOf,sweep,groupBy,
   badCoins,badHours,findings,MISTAKES,mistakeReport,loadMem,saveMem,vetoed,veto,snapshotOf,applyTo,recordLesson,revertLesson,autopilotStep};
 })();

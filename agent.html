@@ -163,11 +163,11 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
   <p class="disclaimer">The agent studies your demo trades only. It looks for patterns that lost money and suggests rules to avoid them. Past results do not guarantee future results: a rule that fits the last 30 trades can fail on the next 30, so treat low-confidence findings as hints and keep collecting trades. It never places real orders. Apply works when this page and the scanner open from the same place (the same folder on your computer, or the same GitHub Pages site).</p>
 </div>
 
-<script src="agent-core.js?v=7"></script>
+<script src="agent-core.js?v=8"></script>
 <script>
 'use strict';
 if(!window.AgentCore)document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f45d70;border-radius:8px;color:#f45d70">agent-core.js is missing. Put agent-core.js in the same folder (or GitHub repo) as this page.</p>');
-if(window.AgentCore&&!(AgentCore.VERSION>=7))document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f2b648;border-radius:8px;color:#f2b648">An old copy of agent-core.js is loaded, so some fixes won’t show. Replace agent-core.js with the newest file, then press Ctrl+F5. On GitHub Pages, wait 10 minutes after uploading.</p>');
+if(window.AgentCore&&!(AgentCore.VERSION>=8))document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f2b648;border-radius:8px;color:#f2b648">An old copy of agent-core.js is loaded, so some fixes won’t show. Replace agent-core.js with the newest file, then press Ctrl+F5. On GitHub Pages, wait 10 minutes after uploading.</p>');
 const KEYS={S:'scalpRadarV1',D:'scalpRadarDemoV1',F:'scalpRadarFutV1',CMD:'scalpRadarAgentCmd',AG:'scalpRadarAgentV1'};
 const $=s=>document.querySelector(s);
 const {sum,avg,money,smoney,pct,cls,fr,fpf,dur,hh,stats,drawdown,confOf,sweep,groupBy}=AgentCore;
@@ -278,8 +278,8 @@ function renderMemory(T,set){
 function renderIndicators(T){const st=AgentCore.indicatorStats(T),withIv=T.filter(t=>t.iv).length;
   $('#indTable').innerHTML=st.map((x,i)=>`<tr><td class="mut">${i+1}</td><td style="text-align:left"><b>${x.name}</b></td><td>${x.n} trades</td>
     <td>${x.n>=5?`<span class="${x.wr>=55?'up':x.wr<40?'dn':''}">${x.wr.toFixed(0)}%</span>`:'<span class="mut">needs 5</span>'}</td><td class="mut">${x.an>=5?x.awr.toFixed(0)+'%':'—'}</td>
-    <td class="${cls(x.net)}">${x.n?smoney(x.net):'—'}</td><td>${x.n>=10?`<span class="${x.w>1?'up':x.w<1?'dn':''}">${x.w.toFixed(2)}×</span>`:'<span class="mut">1.00× (needs 10)</span>'}</td></tr>`).join('');
-  $('#indNote').textContent=withIv?`Based on ${withIv} closed trade${withIv>1?'s':''} that recorded every indicator vote. A win % above 55% means the indicator helps; below 40% it now counts less.`:'No trades with indicator votes yet. Win rates start filling in as new trades close.'}
+    <td class="${cls(x.net)}">${x.n?smoney(x.net):'—'}</td><td>${x.n>=20?`<span class="${x.w>1?'up':x.w<1?'dn':''}">${x.w.toFixed(2)}×</span>`:'<span class="mut">1.00× (needs 20)</span>'}</td></tr>`).join('');
+  $('#indNote').textContent=withIv?`Based on ${withIv} closed trade${withIv>1?'s':''} that recorded every indicator vote. A win % above 55% means the indicator helps; below 40% it counts less. Weights start after 20 trades and use a win % pulled toward 50%, so a short lucky streak can’t swing them.`:'No trades with indicator votes yet. Win rates start filling in as new trades close.'}
 function renderWhatIf(T,set){
   const ms=+$('#w_score').value||0,mi=+$('#w_ind').value||0,side=$('#w_side').value,bc=$('#w_block').checked?badCoins(T,{block:[],badHours:[]}):[],bh=$('#w_hours').checked?badHours(T,{block:[],badHours:[]}):[];
   const keep=T.filter(t=>(t.score==null||t.score>=ms)&&(t.indPct==null||t.indPct>=mi)&&(side==='BOTH'||t.dir===side)&&!bc.includes(t.base)&&!bh.includes(t.hour));
@@ -288,7 +288,7 @@ function renderWhatIf(T,set){
   const diff=b.net-a.net;
   $('#w_out').innerHTML=col('Your actual trades',a,T)+col('With these rules',b,keep)+
     `<div class="col"><h3>Difference</h3><div class="kv"><span>Net change</span><span class="${cls(diff)}">${smoney(diff)}</span><span>Trades skipped</span><span>${T.length-keep.length}</span><span>Skipped coins</span><span>${bc.join(', ')||'—'}</span><span>Skipped hours</span><span>${bh.map(h=>String(h).padStart(2,'0')+':00').join(', ')||'—'}</span></div>
-    <p class="sub" style="margin:10px 0 0">Only trades that were actually taken can be replayed, so lowering a rule below its current value shows no change. Trades without entry details pass the score and indicator filters.</p></div>`;
+    <p class="sub" style="margin:10px 0 0"><b>In-sample warning:</b> these rules are tested on the same trades they were chosen from, so live results are usually worse. Autopilot changes are checked on the next 20 trades for that reason. Only trades that were actually taken can be replayed, so lowering a rule below its current value shows no change. Trades without entry details pass the score and indicator filters.</p></div>`;
 }
 const BD=[
   ['Direction',t=>t.dir,null],
