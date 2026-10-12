@@ -1,0 +1,16 @@
+{
+  "name": "scalp-radar-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runs Scalp Radar 24/7 and shows the same live results on every device.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "jsdom": "24.1.3"
+  }
+}

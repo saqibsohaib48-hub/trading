@@ -164,6 +164,7 @@ td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-s
 </div>
 
 <script src="agent-core.js?v=8"></script>
+<script src="server-config.js"></script>
 <script>
 'use strict';
 if(!window.AgentCore)document.body.insertAdjacentHTML('afterbegin','<p style="margin:16px;padding:14px;border:1px solid #f45d70;border-radius:8px;color:#f45d70">agent-core.js is missing. Put agent-core.js in the same folder (or GitHub repo) as this page.</p>');
@@ -177,7 +178,17 @@ try{AG=Object.assign(AG,getLS(KEYS.AG)||{})}catch(e){}
 function saveAG(){try{localStorage.setItem(KEYS.AG,JSON.stringify(AG))}catch(e){}}
 if(location.protocol==='file:')$('#scanLink').href='scalp-radar.html';
 
-function loadBrowser(){return{settings:getLS(KEYS.S)||{},spot:getLS(KEYS.D),fut:getLS(KEYS.F),from:'browser'}}
+/* shared-server mode: read the server's state; agent decisions go to the server (owner PIN) */
+const REMOTE=!!window.SR_SERVER,SRV=REMOTE?String(window.SR_SERVER).replace(/\/$/,''):'';let REM=null;
+const origSet=Storage.prototype.setItem;
+if(REMOTE)Storage.prototype.setItem=function(k,v){origSet.call(this,k,v);if(this===window.localStorage&&(k===KEYS.CMD||k==='scalpRadarAgentMem'))remotePost('set',{key:k,value:v})};
+async function remotePost(type,payload,retry=true){let pin='';try{pin=sessionStorage.getItem('srPin')||''}catch(e){}
+  if(!pin){pin=prompt('Owner PIN to change the shared scanner (viewers can only watch):')||'';if(!pin){toast('Not saved: owner PIN needed.');setTimeout(pullServer,300);return}try{sessionStorage.setItem('srPin',pin)}catch(e){}}
+  try{const r=await fetch(SRV+'/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin,type,payload})});
+    if(r.status===401){try{sessionStorage.removeItem('srPin')}catch(e){}if(retry)return remotePost(type,payload,false);toast('Wrong PIN. Nothing was changed.');setTimeout(pullServer,300);return}
+    if(r.status===429){toast('Too many wrong PINs. Try again in 10 minutes.');return}setTimeout(pullServer,800)}catch(e){toast('Could not reach the server.')}}
+async function pullServer(){try{const r=await fetch(SRV+'/api/state?v=-1',{cache:'no-store'});const j=await r.json();REM=j.state;if(REM.mem)origSet.call(localStorage,'scalpRadarAgentMem',REM.mem);SRC=loadBrowser();render()}catch(e){$('#status').textContent='Can’t reach the shared server.'}}
+function loadBrowser(){if(REMOTE)return{settings:REM?REM.S:{},spot:REM?REM.D:null,fut:REM?REM.F:null,from:'server'};return{settings:getLS(KEYS.S)||{},spot:getLS(KEYS.D),fut:getLS(KEYS.F),from:'browser'}}
 function SET(){return AgentCore.settingsView(SRC.settings,SRC.spot,SRC.fut)}
 function acctMode(){const v=$('#acct').value;if(v!=='auto')return v;return SRC.fut&&SRC.fut.closed&&SRC.fut.closed.length?'Futures':'Spot'}
 const norm=AgentCore.norm;
@@ -202,7 +213,7 @@ function sendCmd(cmd,summary,f){
   const prev=getLS(KEYS.CMD),c=Object.assign({id:Date.now()+'-'+Math.random().toString(36).slice(2,7),at:Date.now(),summary:prev&&prev.pendingSince&&Date.now()-prev.at<864e5?prev.summary+'; '+summary:summary},full);
   try{localStorage.setItem(KEYS.CMD,JSON.stringify(c))}catch(e){toast('Could not save. Is browser storage blocked?');return}
   if(!(f&&f.act)){const mem=AgentCore.loadMem();mem.log.unshift({at:c.at,by:'you',text:summary});AgentCore.saveMem(mem)}
-  toast(SRC.from==='file'?`Saved: ${summary}. It reaches the scanner only if the scanner opens from this same place.`:`Applied: ${summary}. The scanner picks it up right away (or when it next opens).`);
+  toast(SRC.from==='file'?`Saved: ${summary}. It reaches the scanner only if the scanner opens from this same place.`:SRC.from==='server'?`Sent to the shared server: ${summary}.`:`Applied: ${summary}. The scanner picks it up right away (or when it next opens).`);
   render();
 }
 let toastT=0;function toast(t){let el=$('.toast');if(!el){el=document.createElement('div');el.className='toast';el.setAttribute('role','status');document.body.appendChild(el)}el.textContent=t;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},4500)}
@@ -213,7 +224,7 @@ function render(){
   const T=allTrades(),set=SET(),S0=stats(T),base=baseBal(),dd=drawdown(T,base),m=acctMode();
   FND=findings(T,set);
   const nf=(SRC.fut&&SRC.fut.closed||[]).length,ns=(SRC.spot&&SRC.spot.closed||[]).length,openN=(SRC.fut&&SRC.fut.open||[]).length+(SRC.spot&&SRC.spot.open||[]).length;
-  $('#status').textContent=`${SRC.from==='file'?'Loaded from export file':'Reading this browser’s demo data'} · futures ${nf} closed, spot ${ns} closed, ${openN} open · analyzing: ${m} · brain v${AgentCore.VERSION||'?'} · updated ${new Date().toLocaleTimeString()}`;
+  $('#status').textContent=`${SRC.from==='file'?'Loaded from export file':SRC.from==='server'?'● Live from the shared server':'Reading this browser’s demo data'} · futures ${nf} closed, spot ${ns} closed, ${openN} open · analyzing: ${m} · brain v${AgentCore.VERSION||'?'} · updated ${new Date().toLocaleTimeString()}`;
   // verdict
   const v=$('#verdict');
   if(!T.length){v.className='verdict';v.innerHTML=`<div class="head">No closed trades yet</div><p>${nf+ns===0&&!SRC.fut&&!SRC.spot?'No demo data found in this browser. Open the scanner from this same folder or site, let it run with auto-scan on, or load an export file.':'The demos have not closed a trade yet. Keep the scanner open with auto-scan on and check back later.'}</p>`}
@@ -353,13 +364,13 @@ $('#w_apply').addEventListener('click',()=>{const T=allTrades(),set=SET(),cmd={S
   sendCmd(cmd,'What-if rules: '+parts.join(', '))});
 $('#bdTabs').addEventListener('click',e=>{const b=e.target.closest('[data-bd]');if(!b)return;bdSel=+b.dataset.bd;renderBreakdown(allTrades())});
 $('#acct').addEventListener('change',()=>{$('#w_score').value='';render()});
-$('#refresh').addEventListener('click',()=>{if(SRC.from==='browser')SRC=loadBrowser();render();toast('Re-analyzed with the latest trades.')});
+$('#refresh').addEventListener('click',()=>{if(SRC.from==='server'){pullServer();return}if(SRC.from==='browser')SRC=loadBrowser();render();toast('Re-analyzed with the latest trades.')});
 $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const j=JSON.parse(rd.result);if(!j.spot&&!j.fut)throw 0;
   SRC={settings:j.settings||{},spot:j.spot,fut:j.fut,from:'file'};render();toast(`Loaded ${f.name}`)}catch(err){toast('That file is not a Scalp Radar export. Use “Export trades” in the scanner.')}};rd.readAsText(f)});
 window.addEventListener('storage',e=>{if(SRC&&SRC.from==='browser'&&[KEYS.S,KEYS.D,KEYS.F,'scalpRadarAgentMem'].includes(e.key)){clearTimeout(window._rt);window._rt=setTimeout(()=>{SRC=loadBrowser();render()},1500)}});
 window.addEventListener('resize',()=>drawEquity(allTrades(),baseBal()));
-setInterval(()=>{if(SRC.from==='browser'){SRC=loadBrowser();render()}},60000);
-SRC=loadBrowser();render();
+setInterval(()=>{if(SRC.from==='server')pullServer();else if(SRC.from==='browser'){SRC=loadBrowser();render()}},REMOTE?10000:60000);
+SRC=loadBrowser();render();if(REMOTE)pullServer();
 </script>
 </body>
 </html>
