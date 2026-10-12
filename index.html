@@ -150,6 +150,9 @@ td button{padding:4px 10px;font-size:12px}
     <label class="f">Spot fee per side (%)<input id="s_spotFee" type="number" min="0" max="0.5" step="0.01"></label>
     <label class="f">Ready score threshold<input id="s_ready" type="number" min="55" max="90" step="1"></label>
     <label class="f">Min indicator agreement (%)<input id="s_indPct" type="number" min="30" max="95" step="1"></label>
+    <label class="f">S2 move threshold (%)<input id="s_s2Thr" type="number" min="0.05" max="5" step="0.05"></label>
+    <label class="f">S2 entry band (%)<input id="s_s2Band" type="number" min="0.01" max="2" step="0.01"></label>
+    <label class="f">S2 smooth period<input id="s_s2Smooth" type="number" min="2" max="50" step="1"></label>
     <label class="f">Trade direction<select id="s_side"><option value="BOTH">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option></select></label>
     <label class="f chk"><input id="s_futOnly" type="checkbox"> Only coins with futures</label>
     <label class="f chk"><input id="s_sound" type="checkbox"> Sound on new signal</label>
@@ -166,6 +169,7 @@ td button{padding:4px 10px;font-size:12px}
       <label class="f">Starting balance ($)<input id="d_start" type="number" min="100" step="100"></label>
       <label class="f">Max open trades<input id="d_maxOpen" type="number" min="1" max="20" step="1"></label>
       <label class="f">Fee per side (%)<input id="d_fee" type="number" min="0" max="0.5" step="0.01"></label>
+      <label class="f">Extra slippage (%)<input id="d_slip" type="number" min="0" max="0.5" step="0.01"></label>
       <label class="f chk"><input id="d_auto" type="checkbox"> Auto-take READY signals</label>
       <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap"><button id="d_reset" type="button">Reset demo</button><button type="button" class="exportBtn">Export trades</button></div>
     </section>
@@ -174,9 +178,10 @@ td button{padding:4px 10px;font-size:12px}
     <div class="eqbox"><canvas id="eq"></canvas></div>
     <h2>Open trades <small id="openNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>Now</th><th>Stop</th><th>Next target</th><th>Size</th><th>P&amp;L</th><th>Signal now</th><th>Open for</th><th></th></tr></thead><tbody id="dopen"></tbody></table></div>
+    <p class="sub" id="dskip"></p>
     <h2>Trade history <small id="histNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Fees</th><th>P&amp;L</th><th>R</th><th>Held</th></tr></thead><tbody id="dhist"></tbody></table></div>
-    <p class="disclaimer">How the demo works: when a scan marks a coin READY, the demo opens a trade at the scan price, sized so the stop loss costs your risk % (set in Settings) of the demo balance. Prices are checked every 5 seconds. At TP1 it closes 50% and moves the stop to entry. At TP2 it closes another 30% and moves the stop to TP1. At TP3 it closes the rest. A trade only ever closes at a take-profit or the stop-loss (or when you press Close); there is no time limit and no close on signal changes. Fees are charged on every fill. Max 10× of balance per trade, one trade per coin, and a 15-minute pause on a coin after it closes. The demo only runs while this page is open, and it is saved in this browser. Real fills can be worse than these results because of slippage and very fast moves.</p>
+    <p class="disclaimer">How the spot demo works: spot cannot short, so it only takes READY <b>long</b> signals (shorts go to the futures demo). Every trade first passes the 9-check pre-trade gate; any FAIL skips it and two or more warnings halve the size. It buys at the live ask plus slippage, never the old scan price, sized so the stop costs your risk % including fees, but never more than 25% of equity or more than your free cash (spot has no leverage). At TP1 (1.5R) it sells 40% and moves the stop to breakeven after fees; at TP2 (2.5R) another 30% and the stop moves to TP1; at TP3 (4R) the rest. Take-profits fill only when price trades through them; a stop that price gaps past fills at the worse live price. Trades close only at a take-profit or the stop (or your Close). Binance spot fee is 0.1% per side. The demo runs only while this page is open and is saved in this browser.</p>
   </div>
 
   <div id="viewFut" hidden>
@@ -189,6 +194,7 @@ td button{padding:4px 10px;font-size:12px}
       <label class="f">Taker fee (%)<input id="f_taker" type="number" min="0" max="0.2" step="0.001"></label>
       <label class="f">Extra slippage (%)<input id="f_slip" type="number" min="0" max="0.5" step="0.01"></label>
       <label class="f">Maintenance margin, alts (%)<input id="f_mmr" type="number" min="0.1" max="10" step="0.1"></label>
+      <label class="f">Max total exposure (× equity)<input id="f_maxExp" type="number" min="0.5" max="20" step="0.5"></label>
       <label class="f chk"><input id="f_bnb" type="checkbox"> Pay fees in BNB (−10%)</label>
       <label class="f chk"><input id="f_auto" type="checkbox"> Auto-take READY signals</label>
       <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap"><button id="f_reset" type="button">Reset futures demo</button><button type="button" class="exportBtn">Export trades</button></div>
@@ -202,7 +208,7 @@ td button{padding:4px 10px;font-size:12px}
     <p class="sub" id="fskip"></p>
     <h2>Trade history <small id="fhistNote"></small></h2>
     <div class="tablebox"><table><thead><tr><th>Closed</th><th>Coin</th><th>Side</th><th>Entry</th><th>Avg exit</th><th>Result</th><th>Gross</th><th>Fees</th><th>Funding</th><th>Net</th><th>ROE</th><th>R</th><th>Held</th></tr></thead><tbody id="fhist"></tbody></table></div>
-    <p class="disclaimer">How the futures demo works, like a Binance USDⓈ-M isolated-margin position: entries are market orders filled at the live futures ask (long) or bid (short) plus your extra slippage, and pay the taker fee. The stop keeps the signal's distance in %, and size is set so that hitting the stop, including fees and slippage, costs your risk % of the balance. Take-profits are limit orders filled at the target price with the maker fee; stops are stop-market orders resting on the exchange, so they fill at the stop price with double slippage and the taker fee; a manual Close is a market order at the live bid/ask with slippage and the taker fee. Trades only close at a take-profit or the stop-loss, never on a timer or a signal change. Funding is charged or paid at each real funding time using the live rate and mark price (longs pay when the rate is positive). Liquidation uses the mark price and an estimated maintenance margin; if it is hit, the position's whole margin is lost. A signal is skipped if its stop sits beyond the liquidation price or there isn't enough free margin. Maintenance margin rates and maximum leverage vary by coin and position size on Binance, so check your own limits before trading live.</p>
+    <p class="disclaimer">How the futures demo works, like a Binance USDⓈ-M isolated-margin position: entries are market orders filled at the live futures ask (long) or bid (short) plus your extra slippage, and pay the taker fee. The stop keeps the signal's distance in %, and size is set so that hitting the stop, including fees and slippage, costs your risk % of the balance. Every trade first passes the 9-check pre-trade gate (portfolio heat, position size, correlated exposure, BTC regime, volume, stop-loss size, risk:reward after fees, revenge trading, daily loss limit): any FAIL skips the trade and two or more warnings halve it. Size is also capped by max total exposure (3× equity by default) and to 25% of the visible order book. Targets are 1.5R/2.5R/4R closing 40/30/30%, and the stop moves to breakeven after fees at TP1. Take-profits are limit orders that fill only when price trades through the target, with the maker fee; stops are stop-market orders: they fill at the stop price, or at the worse live price if price gaps past it, with double slippage and the taker fee; a manual Close is a market order at the live bid/ask with slippage and the taker fee. Trades only close at a take-profit or the stop-loss, never on a timer or a signal change. Funding is charged or paid at each real funding time using the live rate and mark price (longs pay when the rate is positive). Liquidation uses the mark price and an estimated maintenance margin; if it is hit, the position's whole margin is lost. A signal is skipped if its stop sits beyond the liquidation price or there isn't enough free margin. Maintenance margin rates and maximum leverage vary by coin and position size on Binance, so check your own limits before trading live.</p>
   </div>
 
   <div id="viewScan">
@@ -242,8 +248,9 @@ td button{padding:4px 10px;font-size:12px}
       <li><b>Context (1):</b> Fear &amp; Greed. Market-cap rank and CoinGecko trending appear as tags.</li>
     </ul>
     <p><b>29-indicator confirmation</b> (your list): Supertrend, Ichimoku Cloud, RSI, MACD, VWAP, ADX/DMI, Bollinger Bands, Stochastic RSI, EMA 9/21/50/200, Volume Profile, ATR, Parabolic SAR, CCI, Williams %R, Keltner Channels, Donchian Channels, Hull MA, Average Volume, Pivot Points Standard, OBV, plus the direction indicators UT Bot Alerts, AlphaTrend, HalfTrend, QQE MOD, WaveTrend, SSL Hybrid, Buy/Sell Volume Pressure, TradingView Technical Ratings and Lorentzian Classification (Supertrend is in both lists and counts once). Each votes BUY, SELL or NEUTRAL, mostly on the 15m chart (Ichimoku on 1h, Pivots on the daily, VWAP on 5m). Every trade records every vote, so each indicator builds its own <b>win %</b>; higher win % counts more. They confirm the score rather than adding to it.</p>
-    <p><b>READY</b> needs a score at or above your threshold (default 70) and must pass all 9 safety gates: volatility in a tradable range, RSI not stretched, tight spread, volume or whales confirming, room to reach TP1 before the 24h high/low, not overextended on the day (±30%), enough order book liquidity, enough of the 20 confirmation indicators agreeing, and for shorts, the coin must have Binance futures (spot-only coins can't be shorted). A high score that fails a gate shows as <b>WATCH</b>.</p>
-    <p><b>Levels:</b> stop loss sits beyond the recent 1-hour swing on the 5m chart, limited to 0.5–2.5× ATR. Targets are 1R, 2R and 3R. A common way to manage it: take part profit at TP1 and move the stop to entry.</p>
+    <p><b>READY</b> needs a score at or above your threshold (default 70) and must pass all 10 safety gates, starting with the S1+S2 main confirmation: volatility in a tradable range, RSI not stretched, tight spread, volume or whales confirming, room to reach TP1 (1.5R) before the 24h high/low, not overextended on the day (±20%), enough order book liquidity, enough of the 20 confirmation indicators agreeing, and for shorts, the coin must have Binance futures (spot-only coins can't be shorted). A high score that fails a gate shows as <b>WATCH</b>.</p>
+    <p><b>Main confirmation: S1 + S2</b> (your TradingView script). S1 compares the live price with yesterday’s daily close: green allows longs only, red allows shorts only. S2 needs a significant move (more than 0.4% from yesterday’s close) and price on the right side of the weighted line’s entry zone (SMA 10 of close × (1 − difference) on 15m bars, ±0.15%). No trade is allowed without all three. Two fixes to the original script: it used <code>'1430'</code>, which is a 1430-minute bar, not a daily one, so this uses the real daily close; and its dynamic threshold compared a percent to a price, which made it always true on cheap coins and never true on BTC, so the 0.4% threshold now applies to every coin.</p>
+    <p><b>Levels:</b> stop loss sits beyond the recent 1-hour swing on the 5m chart, limited to 0.5–2.5× ATR. Targets are 1.5R, 2.5R and 4R, closing 40/30/30%: that keeps risk:reward above 1.5 after fees, which the old 1R/2R/3R targets did not. Signals use closed candles only, so they don’t flip mid-candle.</p>
     <p><b>Position size</b> uses your account size and risk %, so hitting the stop loses only that percentage.</p>
   </details>
   <p class="disclaimer">Signals are rule-based readings of public market data, not financial advice and not a guarantee of profit. Scalping is high risk, fees and slippage add up, and data can lag. Check the chart yourself before every trade and never risk money you can’t afford to lose.</p>
@@ -253,11 +260,11 @@ td button{padding:4px 10px;font-size:12px}
 <div class="backdrop" id="backdrop" hidden></div>
 <aside class="drawer" id="drawer" hidden aria-label="Coin details"></aside>
 
-<script src="agent-core.js?v=7"></script>
+<script src="agent-core.js?v=8"></script>
 <script>
 'use strict';
 /* ---------- settings ---------- */
-const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,indPct:58,lev:10,spotFee:0.1,exitMode:'off',side:'BOTH',futOnly:false,sound:false,auto:true};
+const DEF={minVol:15,deep:60,refresh:3,account:1000,risk:1,ready:70,minInd:12,indPct:58,s2Thr:0.4,s2Band:0.15,s2Smooth:10,lev:10,spotFee:0.1,exitMode:'off',side:'BOTH',futOnly:false,sound:false,auto:true};
 let S=Object.assign({},DEF);
 try{Object.assign(S,JSON.parse(localStorage.getItem('scalpRadarV1')||'{}'))}catch(e){}
 function save(){try{localStorage.setItem('scalpRadarV1',JSON.stringify(S))}catch(e){}}
@@ -435,7 +442,7 @@ const IND_TOTAL=IND_LIST.length;
 let INDSTAT={};// id -> {n,wins,wr,w}, rebuilt from closed demo trades each scan
 function refreshIndStats(){INDSTAT={};const all=[...(D&&D.closed||[]),...(F&&F.closed||[])];
   for(const [id] of IND_LIST){let n=0,w=0;for(const t of all){const v=t.ctx&&t.ctx.iv?t.ctx.iv[id]:0;if(!v)continue;const s=t.dir==='LONG'?1:-1;if(v!==s)continue;n++;if((t.net??t.pnl)>0)w++}
-    const wr=n?w/n*100:null;INDSTAT[id]={n,wins:w,wr,w:n>=10?Math.max(0.25,Math.min(2,0.25+(wr-35)/20)):1}}}
+    const wr=n?w/n*100:null,wrS=(w+5)/(n+10)*100;INDSTAT[id]={n,wins:w,wr,w:n>=20?Math.max(0.25,Math.min(2,0.25+(wrS-35)/20)):1}}} // win % shrunk toward 50% and 20+ trades needed, so a lucky streak can't swing the weights
 
 function indicators29(k5,k15,k1,d){
   const V={},T=(id,vote,val,tf='15m')=>{V[id]={vote,val,tf}};
@@ -458,7 +465,7 @@ function indicators29(k5,k15,k1,d){
   const km=emaArr(c,20)[i],ka=atr(h,l,c,10);T('keltner',p>km+0.1*ka?1:p<km-0.1*ka?-1:0,p>km+2*ka?'Above upper channel':p<km-2*ka?'Below lower channel':`${p>=km?'Above':'Below'} middle line ${fp(km)}`);
   const dh=Math.max(...h.slice(n-21,n-1)),dl=Math.min(...l.slice(n-21,n-1)),dp=(p-dl)/((dh-dl)||1e-12);T('donchian',p>=dh||dp>0.75?1:p<=dl||dp<0.25?-1:0,p>=dh?'Breakout above 20-bar high':p<=dl?'Breakdown below 20-bar low':`At ${(dp*100).toFixed(0)}% of the channel`);
   const hm=hmaArr(c,21);T('hma',p>hm[i]&&hm[i]>hm[i-1]?1:p<hm[i]&&hm[i]<hm[i-1]?-1:0,`HMA 21 ${fp(hm[i])} ${hm[i]>hm[i-1]?'rising':'falling'}, price ${p>hm[i]?'above':'below'}`);
-  const av=avg(k15.v.slice(n-22,n-2)),vr=k15.v[n-2]/(av||1),bd=c[n-2]-k15.o[n-2];T('avgvol',vr>=1.2?Math.sign(bd):0,`Last candle ${vr.toFixed(1)}× its 20-bar average, ${bd>=0?'green':'red'}`);
+  const av=avg(k15.v.slice(n-21,n-1)),vr=k15.v[n-1]/(av||1),bd=c[n-1]-k15.o[n-1];T('avgvol',vr>=1.2?Math.sign(bd):0,`Last candle ${vr.toFixed(1)}× its 20-bar average, ${bd>=0?'green':'red'}`);
   const day0=Math.floor(Date.now()/864e5)*864e5,idx=k1.t.map((t,j)=>t>=day0-864e5&&t<day0?j:-1).filter(j=>j>=0);
   if(idx.length>=20){const PH=Math.max(...idx.map(j=>k1.h[j])),PL=Math.min(...idx.map(j=>k1.l[j])),PC=k1.c[idx[idx.length-1]],P=(PH+PL+PC)/3,R1=2*P-PL,S1=2*P-PH;
     T('pivots',p>P&&!(p<R1&&R1-p<d.atr*0.5)?1:p<P&&!(p>S1&&p-S1<d.atr*0.5)?-1:0,`P ${fp(P)} · R1 ${fp(R1)} · S1 ${fp(S1)}`,'1D')}else T('pivots',0,'Not enough data for yesterday','1D');
@@ -480,15 +487,33 @@ function indicators29(k5,k15,k1,d){
     .sort((a,b)=>((b.n>=5?b.wr:50)-(a.n>=5?a.wr:50))||a.order-b.order);
 }
 
+/* ---------- trade plan constants (reviewed: R:R must clear 1.5 after fees) ---------- */
+const TP_R=[1.5,2.5,4],TP_SHARE=[0.4,0.3,0.3],TP_BUF=0.0002;
+/* ---------- S1 + S2 (your TradingView script) : main direction confirmation ---------- */
+function s1s2(kd,k15,price){
+  // S1: live price vs yesterday's daily close. S2: weighted line = SMA10 of close*(1 - diff) on 15m bars, entry bands ±offset.
+  const dc=kd.c,dt=kd.t;if(dc.length<2)return null;
+  const Y=dc[dc.length-2],diff=(price-Y)/Y;
+  const yFor=t=>{let k=-1;for(let j=0;j<dt.length;j++)if(dt[j]<=t)k=j;return k>0?dc[k-1]:null};
+  const n=k15.c.length,P=S.s2Smooth||10,zs=[];
+  for(let j=n-(P-1);j<n;j++){const y=yFor(k15.t[j]);if(!y)continue;const c=k15.c[j],dd=(c-y)/y;zs.push(c-dd*c)}
+  zs.push(price-diff*price);
+  const line=avg(zs.slice(-P)),off=(S.s2Band||0.15)/100,up=line*(1+off),lo=line*(1-off);
+  const sig=Math.abs(diff)>(S.s2Thr||0.4)/100;
+  let flip=0;for(let j=Math.max(1,n-4);j<n;j++){const y=yFor(k15.t[j]),y0=yFor(k15.t[j-1]);if(!y||!y0)continue;const a=Math.sign(k15.c[j]-y),b=Math.sign(k15.c[j-1]-y0);if(a&&b&&a!==b)flip=a}
+  let touch=false;for(let j=Math.max(0,n-3);j<n;j++)if(k15.l[j]<=up&&k15.h[j]>=lo)touch=true;
+  return{Y,diff,dir:diff>0?1:diff<0?-1:0,sig,line,up,lo,flip,touch}}
+
 /* ---------- analysis ---------- */
 function baseOf(sym){return sym.replace(/USDT$/,'')}
 async function analyze(sym,tk,ctx){
   const q=p=>getJSON(SPOT+p);
-  const [r5,r15,r1h,r4h,ob,ag]=await Promise.all([
+  const [r5,r15,r1h,r4h,rd,ob,ag]=await Promise.all([
     q(`/api/v3/klines?symbol=${sym}&interval=5m&limit=120`),
     q(`/api/v3/klines?symbol=${sym}&interval=15m&limit=250`),
     q(`/api/v3/klines?symbol=${sym}&interval=1h&limit=250`),
     q(`/api/v3/klines?symbol=${sym}&interval=4h&limit=100`),
+    q(`/api/v3/klines?symbol=${sym}&interval=1d&limit=5`),
     q(`/api/v3/depth?symbol=${sym}&limit=100`).catch(()=>null),
     q(`/api/v3/aggTrades?symbol=${sym}&limit=1000`).catch(()=>null)]);
   const hasFut=ctx.fund[sym]!==undefined;
@@ -496,8 +521,10 @@ async function analyze(sym,tk,ctx){
   if(hasFut){const F=(p,lim)=>getJSON(`${FAPI}/futures/data/${p}?symbol=${sym}&period=5m&limit=${lim}`,8000).catch(()=>null);
     [oi,ls,ftk,top]=await Promise.all([F('openInterestHist',13),F('globalLongShortAccountRatio',13),F('takerlongshortRatio',6),F('topLongShortPositionRatio',13)])}
 
-  const k5=K(r5),k15=K(r15),k1=K(r1h),k4=K(r4h);
-  const n=k5.c.length,price=k5.c[n-1],n15=k15.c.length,n1=k1.c.length,n4=k4.c.length;
+  // signals use CLOSED candles only (the forming candle can still change); entries use the live price
+  const live=+r5[r5.length-1][4],cl=a=>a.slice(0,-1);
+  const k5=K(cl(r5)),k15=K(cl(r15)),k1=K(cl(r1h)),k4=K(cl(r4h)),kd=K(rd);
+  const n=k5.c.length,price=live,n15=k15.c.length,n1=k1.c.length,n4=k4.c.length;
   const e9=emaArr(k5.c,9),e21=emaArr(k5.c,21);
   const e9q=emaArr(k15.c,9),e21q=emaArr(k15.c,21);
   const e20h=emaArr(k1.c,20),e50h=emaArr(k1.c,50),e200h=emaArr(k1.c,200);
@@ -509,7 +536,7 @@ async function analyze(sym,tk,ctx){
   const m=macd(k5.c);
   let vp=0,vb=0;for(let i=n-48;i<n;i++){const tp=(k5.h[i]+k5.l[i]+k5.c[i])/3;vp+=k5.v[i];vb+=k5.v[i]/tp}d.vwap=vb?vp/vb:price;
   let fresh=0;for(let i=n-3;i<n;i++){const a=Math.sign(e9[i]-e21[i]),b=Math.sign(e9[i-1]-e21[i-1]);if(a!==b)fresh=a}
-  const avgV=avg(k5.v.slice(n-23,n-2));d.volX=k5.v[n-2]/(avgV||1);const body=k5.c[n-2]-k5.o[n-2];
+  const avgV=avg(k5.v.slice(n-21,n-1));d.volX=k5.v[n-1]/(avgV||1);const body=k5.c[n-1]-k5.o[n-1];
   d.taker=sum(k5.tb.slice(n-6))/(sum(k5.v.slice(n-6))||1);
   d.imb=0;d.spread=0;let bidD=0,askD=0;
   if(ob&&ob.bids&&ob.bids.length&&ob.asks.length){
@@ -529,7 +556,7 @@ async function analyze(sym,tk,ctx){
   if(top&&top.length){d.topChg=lchg(top)}
   if(ftk&&ftk.length)d.ftk=avg(ftk.map(x=>+x.buySellRatio));
   if(top&&top.length)d.top=+top[top.length-1].longShortRatio;
-  const priceChg1h=(price-k5.c[n-13])/k5.c[n-13]*100;
+  const priceChg1h=(price-k5.c[n-12])/k5.c[n-12]*100;d.chg1h=priceChg1h;
   const cg=CG.map[d.base];d.rank=cg?cg.rank:null;d.name=cg?cg.name:'';d.trending=CG.trending.has(d.base);
 
   /* ---- 29 scoring checks: b = vote from -1 (short) to +1 (long), w = weight ---- */
@@ -578,7 +605,7 @@ async function analyze(sym,tk,ctx){
   if(k15.l[i2]<k15.l[i1]&&rs15[i2]>rs15[i1]+2&&rs15[i2]<45){dv=1;dvt='Bullish: lower low in price, higher low in RSI'}
   else if(k15.h[j2]>k15.h[j1]&&rs15[j2]<rs15[j1]-2&&rs15[j2]>55){dv=-1;dvt='Bearish: higher high in price, lower high in RSI'}
   add('diverg','Momentum','15m RSI divergence',1,dv,dvt);
-  const cp=candlePattern(k5,n-2,d.ema21);
+  const cp=candlePattern(k5,n-1,d.ema21);
   add('candle','Momentum','5m candle pattern',1,cp[0],cp[1]+' on the last closed candle');
   // FLOW
   add('volume','Flow','5m volume spike',2,d.volX>=1.8?Math.sign(body):d.volX>=1.3?0.5*Math.sign(body):0,`Last candle ${d.volX.toFixed(1)}× average volume, ${body>=0?'green':'red'}`);
@@ -618,23 +645,26 @@ async function analyze(sym,tk,ctx){
   else{sl=Math.max(price+a,hi+0.15*a);sl=Math.min(sl,price+2.5*a);sl=Math.max(sl,price+0.5*a)}
   const risk=Math.abs(price-sl);
   d.entry=price;d.zone=[Math.min(price,d.ema9),Math.max(price,d.ema9)];d.sl=sl;d.riskPct=risk/price*100;
-  d.tp=[1,2,3].map(R=>price+s*R*risk);
+  d.tp=TP_R.map(R=>price+s*R*risk);
+  d.s12=s1s2(kd,k15,price);
 
   /* ---- 7 safety gates: all must pass for READY ---- */
   const G=[];const gate=(label,pass,text)=>G.push({label,pass,text});
+  {const z=d.s12;const ok=!!z&&z.dir===s&&z.sig&&(s>0?price>z.up:price<z.lo);d.s12ok=ok;
+   gate('S1+S2 main confirmation',ok,!z?'No daily data for S1/S2':`S1 ${z.dir>0?'GREEN':'RED'} (price ${pct(z.diff*100)} vs yesterday’s close ${fp(z.Y)})${z.dir!==s?` · against the ${d.dir.toLowerCase()}`:''} · S2 ${z.sig?'significant move':`move under ${S.s2Thr}%`}, price ${price>z.up?'above':price<z.lo?'below':'inside'} the S2 zone ${fp(z.lo)}–${fp(z.up)}`)}
   gate('Volatility in range',d.atrPct>=0.12&&d.atrPct<=2.5,`5m ATR ${d.atrPct.toFixed(2)}% (needs 0.12–2.5%)`);
   gate('RSI not stretched',s>0?d.rsi5<=74:d.rsi5>=26,`5m RSI ${d.rsi5.toFixed(0)} for a ${d.dir.toLowerCase()}`);
   gate('Tight spread',d.spread<=0.08,`Spread ${d.spread.toFixed(3)}% (max 0.08%)`);
   const flow=C.filter(c=>['volume','taker','whale','ftaker'].includes(c.id)).some(c=>Math.sign(c.b)===s&&Math.abs(c.b)>=0.3);
   gate('Volume or whales confirm',flow,flow?'At least one of volume, taker flow or whales agrees':'No volume, taker or whale confirmation yet');
-  const res=Math.max(...k1.h.slice(n1-25,n1-1)),sup=Math.min(...k1.l.slice(n1-25,n1-1));
+  const res=Math.max(...k1.h.slice(n1-24)),sup=Math.min(...k1.l.slice(n1-24));
   const room=s>0?(res<=price?Infinity:res-price):(sup>=price?Infinity:price-sup);
-  gate('Room to TP1',room>=risk,room===Infinity?(s>0?'Price is above the 24h high, no resistance overhead':'Price is below the 24h low, no support underneath'):`${s>0?'24h high':'24h low'} ${fp(s>0?res:sup)} is ${(room/risk).toFixed(1)}R away (needs 1R)`);
-  gate('Not overextended',s>0?d.chg<=30:d.chg>=-30,`24h change ${pct(d.chg)} (limit ±30% in trade direction)`);
+  gate('Room to TP1',room>=TP_R[0]*risk,room===Infinity?(s>0?'Price is above the 24h high, no resistance overhead':'Price is below the 24h low, no support underneath'):`${s>0?'24h high':'24h low'} ${fp(s>0?res:sup)} is ${(room/risk).toFixed(1)}R away (needs ${TP_R[0]}R)`);
+  gate('Not overextended',s>0?d.chg<=20:d.chg>=-20,`24h change ${pct(d.chg)} (limit ±20% in trade direction: no chasing a pump or dump)`);
   gate('Enough liquidity',Math.min(bidD,askD)>=30000,`Depth within 1%: bids ${fu(bidD)}, asks ${fu(askD)} (min $30K each)`);
   gate('Shortable',s>0||hasFut,s>0?'Long trade, not needed':hasFut?'Coin has Binance futures, short is possible':'Spot-only coin, shorting needs futures');
   gate('Indicators confirm',d.indPct>=S.indPct,`${d.indAgree} of ${d.indTotal} indicators agree with ${d.dir.toLowerCase()} (${d.indAgainst} against) · weighted by win %: ${d.indPct}% (needs ${S.indPct}%)`);
-  d.gates=G;const WL={'Volatility in range':d.atrPct<0.12?'Too quiet to scalp':'Volatility too high','RSI not stretched':s>0?'RSI overbought':'RSI oversold','Tight spread':'Wide spread','Volume or whales confirm':'No volume/whale confirmation','Room to TP1':s>0?'Resistance before TP1':'Support before TP1','Not overextended':'Overextended 24h','Enough liquidity':'Thin order book','Indicators confirm':`Indicators only ${d.indPct}% agree`,'Shortable':'Spot only, can\'t short'};d.warn=G.filter(g=>!g.pass).map(g=>WL[g.label]||g.label);
+  d.gates=G;const WL={'Volatility in range':d.atrPct<0.12?'Too quiet to scalp':'Volatility too high','RSI not stretched':s>0?'RSI overbought':'RSI oversold','Tight spread':'Wide spread','Volume or whales confirm':'No volume/whale confirmation','Room to TP1':s>0?'Resistance before TP1':'Support before TP1','Not overextended':'Overextended 24h','Enough liquidity':'Thin order book','Indicators confirm':`Indicators only ${d.indPct}% agree`,'S1+S2 main confirmation':!d.s12?'No S1/S2 data':d.s12.dir!==s?`S1 ${d.s12.dir>0?'green':'red'}: against ${d.dir.toLowerCase()}`:!d.s12.sig?'S2: move too small':'S2: price inside the zone','Shortable':'Spot only, can\'t short'};d.warn=G.filter(g=>!g.pass).map(g=>WL[g.label]||g.label);
 
   d.tags=[];
   if(d.trending)d.tags.push(['Trending','hot']);
@@ -643,6 +673,8 @@ async function analyze(sym,tk,ctx){
   if(d.wn>=3&&Math.sign(d.whaleNet)===s)d.tags.push(['Whales agree','hot']);
   if(dv===s)d.tags.push(['RSI divergence','hot']);
   if(bo.width<bo.avgW*0.7)d.tags.push(['Squeeze','hot']);
+  if(d.s12&&d.s12.flip===s)d.tags.push(['S1 fresh flip','hot']);
+  if(d.s12&&d.s12.touch&&d.s12ok)d.tags.push(['S2 entry-zone touch','hot']);
 
   d.signal=d.score>=S.ready&&!d.warn.length?'READY':d.score>=Math.min(S.ready-8,62)?'WATCH':'WAIT';
   if(S.side!=='BOTH'&&S.side!==d.dir){if(d.signal==='READY')d.signal='WATCH';d.warn.push(S.side==='LONG'?'Long-only mode':'Short-only mode')}
@@ -687,7 +719,7 @@ async function scan(){
     STATE.scanStart=scanStart;STATE.failed=failed;
     const closedN=0;
     render();
-    demoAfterScan();renderDemo();futAfterScan();renderFut();
+    await demoAfterScan();renderDemo();await futAfterScan();renderFut();
     runAutopilot();
     setStatus(`Last scan ${new Date().toLocaleTimeString()} · ${STATE.rows.length} coins analyzed${errors?` · ${errors} skipped (rate limit or no data)`:''} · source ${SPOT.replace('https://','')}${closedN?` · ${closedN} demo trade${closedN>1?'s':''} closed: signal gone`:''}`);
   }catch(e){
@@ -727,7 +759,7 @@ function ticket(r,market){
   let qty=riskUsd/perUnit,capped=false;const maxQty=S.account*lev*0.98/(entry*(1+taker));
   if(qty>maxQty){qty=maxQty;capped=true}
   qty=floorStep(qty,f.step);
-  const q1=floorStep(qty*0.5,f.step),q2=floorStep(qty*0.3,f.step),q3=Math.max(0,qty-q1-q2);
+  const q1=floorStep(qty*TP_SHARE[0],f.step),q2=floorStep(qty*TP_SHARE[1],f.step),q3=Math.max(0,qty-q1-q2);
   const notional=qty*entry,entryFee=notional*taker,warn=[];
   if(capped)warn.push(fut?`Size capped by your account at ${lev}× leverage`:'Size capped by your account balance');
   if(notional<f.min)warn.push(`Below Binance minimum order of ${fu(f.min)}. Raise account size or risk.`);
@@ -760,7 +792,7 @@ function ticketHTML(r){
     ${row('Margin needed',t=>t.fut?money(t.margin):money(t.notional))}
     ${row('Entry',t=>`<span class="enc">${ft(t.entry,t.f.tick)}</span>`)}
     ${row('Stop loss',t=>`<span class="slc">${ft(t.sl,t.f.tick)}</span>`)}
-    ${[0,1,2].map(i=>row(`TP${i+1} · close ${[50,30,20][i]}%`,t=>`<span class="tpc">${ft(t.tp[i],t.f.tick)}</span> · ${fq(t.tps[i].q,t.f.step)} <span class="up">${smoney(t.tps[i].profit)}</span>`)).join('')}
+    ${[0,1,2].map(i=>row(`TP${i+1} · close ${TP_SHARE[i]*100}%`,t=>`<span class="tpc">${ft(t.tp[i],t.f.tick)}</span> · ${fq(t.tps[i].q,t.f.step)} <span class="up">${smoney(t.tps[i].profit)}</span>`)).join('')}
     ${row('Loss if stopped',t=>`<span class="dn">−${money(t.loss)}</span>`)}
     ${row('Profit if all TPs hit',t=>`<span class="up">${smoney(t.profit)}</span>`)}
     ${row('Liquidation',t=>t.fut?`<span class="dn">${ft(t.liq,t.f.tick)}</span>`:'<span class="mut">none (spot)</span>')}
@@ -777,13 +809,29 @@ function cardOrderHTML(r){
 /* ---------- render ---------- */
 function meterColor(r){return r.dir==='LONG'?'var(--long)':'var(--short)'}
 function sizeFor(r){const riskUsd=S.account*S.risk/100,risk=Math.abs(r.entry-r.sl);const qty=riskUsd/risk,notional=qty*r.entry;return{riskUsd,qty,notional,lev:notional/S.account}}
+function s12HTML(r){const z=r.s12;if(!z)return'<div class="box"><h3>Main confirmation · S1 + S2</h3><div class="sub">No daily data for this coin.</div></div>';
+  const s=r.dir==='LONG'?1:-1,row=(ok,t,d)=>`<div class="ck"><span class="t"><span class="${ok?'up':'dn'}">${ok?'✓':'✗'}</span> ${t}</span><span></span><span class="d">${d}</span></div>`;
+  return `<div class="box"><h3>Main confirmation · S1 + S2 ${r.s12ok?'<span class="pill READY '+r.dir+'">CONFIRMED</span>':'<span class="pill WAIT">BLOCKED</span>'}</h3><div class="checks">
+    ${row(z.dir===s,`S1 colour: <b class="${z.dir>0?'up':'dn'}">${z.dir>0?'GREEN':'RED'}</b>`,`Price ${pct(z.diff*100)} vs yesterday’s daily close ${fp(z.Y)}. A ${r.dir.toLowerCase()} needs ${s>0?'green':'red'}.${z.flip===z.dir?' Fresh flip in the last hour.':''}`)}
+    ${row(z.sig,'S2 significant move',`|${(z.diff*100).toFixed(2)}%| vs threshold ${S.s2Thr}%`)}
+    ${row(s>0?r.price>z.up:r.price<z.lo,'S2 price vs weighted line',`Line ${fp(z.line)} · entry zone ${fp(z.lo)}–${fp(z.up)} · price ${fp(r.price)}${z.touch?' · touched the zone in the last 45 min':''}`)}
+  </div><div class="sub">From your S1+S2 TradingView script. No trade is allowed unless all three are ✓ in the trade direction.</div></div>`}
+function gateHTML(r){const acct=r.hasFut?'fut':'spot';if(acct==='spot'&&r.dir!=='LONG')return'';
+  const pl=acct==='fut'?(futPlanPreview(r)):(spotPlanPreview(r));if(!pl)return'';const g=preTradeGate(r,acct,pl),col={PASS:'up',WARN:'wn',FAIL:'dn'};
+  return `<div class="box"><h3>Pre-trade gate · ${acct==='fut'?'futures':'spot'} demo · ${g.pass}/9 pass · ${g.warns} warn · ${g.fails} fail</h3><div class="checks">
+    ${g.checks.map(c=>`<div class="ck"><span class="t"><span class="mut">[${c.n}]</span> ${c.label}</span><span style="grid-row:1/3;grid-column:2;text-align:right"><span class="pill ${c.st==='PASS'?'LONG':c.st==='FAIL'?'SHORT':'WATCH'}">${c.st}</span></span><span class="d">${c.text}</span></div>`).join('')}</div>
+    ${g.ghosts.map(([n,t])=>`<div class="sub"><span class="wn">👻 ${n}:</span> ${t}</div>`).join('')}
+    <div><span class="pill ${g.verdict==='PROCEED'?'LONG':g.verdict==='DO NOT PROCEED'?'SHORT':'WATCH'}">${g.verdict}</span> <span class="sub">${g.verdict==='PROCEED'?'All checks pass or only one warning: full size.':g.verdict==='DO NOT PROCEED'?(g.fails?'At least one FAIL: the demo will not take this trade.':'Three warned trades in a row: the demo waits for a setup with no warnings.'):'Two or more warnings: the demo halves the size.'}</span></div></div>`}
+function futPlanPreview(r){const b=FX.bid[r.sym],a=FX.ask[r.sym];if(b&&a&&Date.now()-FX.at<=30000)return futPlan(r);
+  const keep={b,a,at:FX.at};FX.bid[r.sym]=r.price;FX.ask[r.sym]=r.price;FX.at=Date.now();const p=futPlan(r);FX.bid[r.sym]=keep.b;FX.ask[r.sym]=keep.a;FX.at=keep.at;return p}
+function spotPlanPreview(r){const a=SQ.ask[r.sym],at=SQ.at;SQ.ask[r.sym]=r.price;SQ.at=Date.now();const p=spotPlan(r);SQ.ask[r.sym]=a;SQ.at=at;return p}
 function levelsHTML(r){
   const s=r.dir==='LONG'?1:-1,P=x=>pct(s*(x-r.entry)/r.entry*100);
   return `<div class="levels">
     <span class="lab">Entry</span><span class="enc">${fp(r.entry)}</span><span class="pct">market</span>
     <span class="lab">Zone</span><span class="enc" style="grid-column:2/4">${fp(r.zone[0])} – ${fp(r.zone[1])}</span>
     <span class="lab">Stop</span><span class="slc">${fp(r.sl)}</span><span class="pct">${P(r.sl)}</span>
-    ${r.tp.map((t,i)=>`<span class="lab">TP${i+1}</span><span class="tpc">${fp(t)}</span><span class="pct">${P(t)} · ${i+1}R</span>`).join('')}
+    ${r.tp.map((t,i)=>`<span class="lab">TP${i+1}</span><span class="tpc">${fp(t)}</span><span class="pct">${P(t)} · ${TP_R[i]}R · close ${TP_SHARE[i]*100}%</span>`).join('')}
   </div>`;
 }
 function reasonsFor(r,k=3){const s=r.dir==='LONG'?1:-1;return r.checks.filter(c=>Math.sign(c.b)===s).sort((a,b)=>b.w*Math.abs(b.b)-a.w*Math.abs(a.b)).slice(0,k)}
@@ -795,6 +843,7 @@ function cardHTML(r,watch){
     <div class="scorebar"><span>${r.score}</span><span class="meter"><i style="width:${r.score}%;background:${meterColor(r)}"></i></span><span class="mut">/100</span></div>
     <div class="sub"><b style="color:var(--fg)">${r.agree}/${r.checks.length}</b> checks agree · <b style="color:var(--fg)">${r.indAgree}/${r.indTotal}</b> indicators (${r.indPct}% weighted) · gates ${r.gates.filter(g=>g.pass).length}/${r.gates.length}</div>
     ${levelsHTML(r)}
+    ${r.s12?`<div class="sub">Main: S1 <b class="${r.s12.dir>0?'up':'dn'}">${r.s12.dir>0?'GREEN':'RED'}</b> ${pct(r.s12.diff*100)} · S2 ${r.s12ok?'<b class="up">✓ confirmed</b>':'<b class="dn">✗ blocked</b>'}</div>`:''}
     ${cardOrderHTML(r)}
     <ul class="reasons">${reasonsFor(r).map(c=>`<li>${c.label}: ${c.text}</li>`).join('')}</ul>
     <div class="tags">${D.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In spot demo</span>':''}${F.open.some(p=>p.sym===r.sym)?'<span class="tag hot">● In futures demo</span>':''}${agentBlocked(r)?`<span class="tag warn">Agent: ${agentBlocked(r).replace(/ \(.*\)| by Trade Agent/g,'').toLowerCase()}</span>`:''}${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>
@@ -822,6 +871,7 @@ const COLS=[
   ['score','Signal',r=>({READY:2,WATCH:1,WAIT:0}[r.signal])*1000+r.score,r=>`<span class="pill ${r.signal} ${r.dir}">${r.signal==='WAIT'?'WAIT':r.signal+' '+r.dir}</span>`],
   ['long','Long',r=>r.long,r=>`${r.long}<span class="mini"><i style="width:${r.long}%;background:var(--long)"></i></span>`],
   ['short','Short',r=>r.short,r=>`${r.short}<span class="mini"><i style="width:${r.short}%;background:var(--short)"></i></span>`],
+  ['s1','S1',r=>r.s12?r.s12.diff:0,r=>r.s12?`<span class="${r.s12.dir>0?'up':'dn'}">${r.s12.dir>0?'▲':'▼'} ${pct(r.s12.diff*100)}</span>${r.s12ok?' ✓':''}`:'—'],
   ['indPct','Indicators',r=>r.indPct,r=>`<span class="${r.indPct>=S.indPct?(r.dir==='LONG'?'up':'dn'):'mut'}">${r.indAgree}/${r.indTotal}</span> <span class="mut">${r.indPct}%</span>`],
   ['rsi5','RSI 5m',r=>r.rsi5,r=>`<span class="${r.rsi5>70?'dn':r.rsi5<30?'up':''}">${r.rsi5.toFixed(0)}</span>`],
   ['volX','Vol ×',r=>r.volX,r=>`<span class="${r.volX>=1.8?'up':''}">${r.volX.toFixed(1)}×</span>`],
@@ -848,13 +898,15 @@ function openDrawer(sym){
     <div class="chead"><span class="sym" style="font-size:30px">${r.base}<small>${r.name||''}</small></span><span><span class="pill ${r.dir}">${r.dir}</span> <span class="pill ${r.signal} ${r.dir}">${r.signal}</span></span></div>
     <div class="scorebar"><span>Long ${r.long}</span><span class="meter"><i style="width:${r.long}%;background:var(--long)"></i></span><span>Short ${r.short}</span></div>
     <div class="box"><h3>Trade plan · ${r.dir.toLowerCase()} scalp</h3>${levelsHTML(r)}
-      <div class="sub">Stop distance ${r.riskPct.toFixed(2)}% (${(r.riskPct/r.atrPct).toFixed(1)}× ATR). Take part profit at TP1 and move the stop to entry.</div></div>
+      <div class="sub">Stop distance ${r.riskPct.toFixed(2)}% (${(r.riskPct/r.atrPct).toFixed(1)}× ATR). At TP1 the stop moves to breakeven after fees.</div></div>
+    ${s12HTML(r)}
+    ${gateHTML(r)}
     ${ticketHTML(r)}
     ${r.warn.length||r.tags.length?`<div class="tags">${r.warn.map(w=>`<span class="tag warn">${w}</span>`).join('')}${r.tags.map(([t,c])=>`<span class="tag ${c}">${t}</span>`).join('')}</div>`:''}
     <div class="box"><h3>${r.indTotal}-indicator confirmation · ${r.indAgree} agree with ${r.dir.toLowerCase()} · ${r.indPct}% weighted</h3>
       <div class="scorebar"><span class="up">${r.ind.filter(x=>x.vote>0).length} buy</span><span class="meter" style="display:flex"><i style="width:${r.ind.filter(x=>x.vote>0).length/r.indTotal*100}%;background:var(--long);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote===0).length/r.indTotal*100}%;background:var(--dim);border-radius:0"></i><i style="width:${r.ind.filter(x=>x.vote<0).length/r.indTotal*100}%;background:var(--short);border-radius:0"></i></span><span class="dn">${r.ind.filter(x=>x.vote<0).length} sell</span></div>
       <div class="checks">${r.ind.map((x,i)=>`<div class="ck"><span class="t"><span class="mut">${i+1}.</span> ${x.name} <span class="mut" style="font-size:12px">${x.tf}</span> <span class="mut" style="font-size:12px">· ${x.n>=5?`win ${x.wr.toFixed(0)}% (${x.n})`:`win % after 5 trades (${x.n})`}${x.w!==1?` · weight ${x.w.toFixed(2)}×`:''}</span></span><span style="grid-row:1/3;grid-column:2;text-align:right"><span class="pill ${x.vote>0?'LONG':x.vote<0?'SHORT':'WAIT'}">${x.vote>0?'BUY':x.vote<0?'SELL':'NEUTRAL'}</span></span><span class="d">${x.val}</span></div>`).join('')}</div>
-      <div class="sub">Sorted by win % in your trade history: how often trades won when that indicator agreed. After 10 trades an indicator counts up to 2× (high win %) or as little as 0.25× (low win %). READY needs ${S.indPct}% weighted agreement; change it in Settings.</div></div>
+      <div class="sub">Sorted by win % in your trade history: how often trades won when that indicator agreed. After 20 trades an indicator counts up to 2× (high win %) or as little as 0.25× (low win %); win % is shrunk toward 50% so a short lucky or unlucky streak can’t swing it. READY needs ${S.indPct}% weighted agreement; change it in Settings.</div></div>
     <div class="box"><h3>Safety gates · ${r.gates.filter(g=>g.pass).length} of ${r.gates.length} passed</h3><div class="checks">${r.gates.map(g=>`<div class="ck"><span class="t"><span class="${g.pass?'up':'dn'}">${g.pass?'✓':'✗'}</span> ${g.label}</span><span></span><span class="d">${g.text}</span></div>`).join('')}</div>
       <div class="sub">All gates must pass before a coin shows as READY.</div></div>
     <div class="box"><h3>All ${r.checks.length} checks · ${r.agree} agree with ${r.dir.toLowerCase()}, ${r.against} against</h3><div class="checks">${groups.map(g=>`<div class="grp">${g}</div>`+r.checks.filter(c=>c.g===g).map(c=>{
@@ -881,10 +933,11 @@ function openDrawer(sym){
 function closeDrawer(){$('#drawer').hidden=true;$('#backdrop').hidden=true}
 
 /* ---------- demo account (paper trading) ---------- */
-const DDEF={start:1000,maxOpen:5,fee:0.05,maxHold:60,auto:true};
+const DDEF={start:1000,maxOpen:5,fee:0.1,slip:0.03,auto:true};
 let D={cfg:Object.assign({},DDEF),base:1000,bal:1000,open:[],closed:[],curve:[],cool:{},since:Date.now()};
 try{const x=JSON.parse(localStorage.getItem('scalpRadarDemoV1')||'null');if(x){D=Object.assign(D,x);D.cfg=Object.assign({},DDEF,x.cfg)}}catch(e){}
 if(!D.curve.length)D.curve=[{t:Date.now(),b:D.bal}];
+if(!D.cfg.v2){if(D.cfg.fee===0.05)D.cfg.fee=0.1;D.cfg.slip=D.cfg.slip??0.03;D.cfg.v2=1}D.skipped=D.skipped||[];
 function dsave(){try{localStorage.setItem('scalpRadarDemoV1',JSON.stringify(D))}catch(e){}}
 const sgn=p=>p.dir==='LONG'?1:-1;
 const unreal=p=>sgn(p)*(p.last-p.entry)*p.left;
@@ -896,15 +949,65 @@ function snap(r){const n=new Date();return{score:r.score,ind:r.indAgree,indPct:r
 function agentBlocked(r){if((S.block||[]).includes(r.base))return'Blocked by Trade Agent';if((S.badHours||[]).includes(new Date().getHours()))return'Paused hour (Trade Agent)';
   if(S.btcFilter&&r.sym!=='BTCUSDT'&&STATE.btcBias!=null&&((r.dir==='LONG'&&STATE.btcBias<-0.3)||(r.dir==='SHORT'&&STATE.btcBias>0.3)))return'Against BTC trend (agent rule)';
   if(S.minAtr&&r.atrPct<S.minAtr)return'Too quiet to scalp (agent rule)';return null}
+/* ---------- PRE-TRADE GATE: 9 checks before every demo trade (PASS / WARN / FAIL) ---------- */
+const GATE_LIM={heat:[60,80],pos:[10,25],corr:[3,5],stop:[2,5],rr:[2,1.5],revenge:[15,5],day:[3,5],btcShock:3,maxExp:3};
+function rrNet(fill,dist,ft,fm,slip){const risk=dist+fill*ft+(fill)*ft+fill*slip;let rew=-fill*ft;TP_R.forEach((k,i)=>rew+=TP_SHARE[i]*(k*dist-fill*fm));return rew/risk}
+function acctInfo(acct){if(acct==='fut'){const eq=futEquity();return{eq,closed:F.closed,open:F.open,netOf:t=>t.net,
+    used:futUsed(),exp:sum(F.open.map(p=>p.left*(p.mark||p.entry))),streak:F.warnStreak||0}}
+  const eq=equity();return{eq,closed:D.closed,open:D.open,netOf:t=>t.pnl,used:sum(D.open.map(p=>p.left*p.entry)),exp:sum(D.open.map(p=>p.left*(p.last||p.entry))),streak:D.warnStreak||0}}
+function preTradeGate(r,acct,plan){
+  const A=acctInfo(acct),eq=Math.max(1e-9,A.eq),s=r.dir==='LONG'?1:-1,C=[],ghosts=[],now=Date.now();
+  const chk=(n,label,st,text)=>C.push({n,label,st,text});const band=(v,[p,w],hi=true)=>hi?(v<p?'PASS':v<=w?'WARN':'FAIL'):(v>=p?'PASS':v>=w?'WARN':'FAIL');
+  const heat=(A.used+plan.alloc)/eq*100;chk(1,'Portfolio heat',band(heat,GATE_LIM.heat),`${heat.toFixed(0)}% of equity allocated after this trade (${acct==='fut'?'margin':'cash'})`);
+  const pos=plan.alloc/eq*100;chk(2,'Position size',band(pos,GATE_LIM.pos),`${acct==='fut'?'Margin':'Cost'} ${money(plan.alloc)} = ${pos.toFixed(1)}% of equity (notional ${money(plan.notional)})`);
+  const same=sum(A.open.filter(p=>p.dir===r.dir).map(p=>Math.abs(p.entry-p.sl)*p.left))+plan.riskUsd,corr=same/eq*100;
+  chk(3,'Concentration',band(corr,GATE_LIM.corr),`All ${r.dir.toLowerCase()}s move together with BTC: ${corr.toFixed(1)}% of equity at risk on the ${r.dir.toLowerCase()} side`);
+  const bb=STATE.btcBias,b1=STATE.btc?STATE.btc.chg1h:0;let st4,t4;
+  if(Math.abs(b1)>GATE_LIM.btcShock){st4='FAIL';t4=`BTC moved ${pct(b1)} in 1h: shock regime, no new trades until it calms`}
+  else if(bb==null||Math.abs(bb)<0.3||Math.sign(bb)===s){st4='PASS';t4=bb==null?'BTC regime unknown':Math.abs(bb)<0.3?'BTC neutral':`With the BTC trend`}
+  else if(r.s12ok){st4='WARN';t4=`Against the BTC trend; thesis: the coin’s own daily trend (S1) agrees`}else{st4='FAIL';t4='Against the BTC trend with no thesis'}
+  chk(4,'Regime alignment',st4,t4);
+  const tk=(r.taker-0.5)*s,obv=(r.checks.find(c=>c.id==='obv')||{b:0}).b*s,volOk=(r.volX>=1.2&&(r.checks.find(c=>c.id==='volume')||{b:0}).b*s>0)||tk>0.03;
+  const diverg=(r.chg1h||0)*s>0.3&&tk<-0.05&&obv<0;
+  chk(5,'Volume confirmation',diverg?'FAIL':volOk?'PASS':'WARN',diverg?'Price moving your way on selling (or buying) pressure against you: divergence':volOk?`Volume backs the move (${r.volX.toFixed(1)}× avg, ${(r.taker*100).toFixed(0)}% market buys)`:'Low volume: the move lacks conviction');
+  const stopPct=plan.riskUsd/eq*100;chk(6,'Stop-loss',band(stopPct,GATE_LIM.stop),`Stop ${fp(plan.sl)} · max loss ${money(plan.riskUsd)} = ${stopPct.toFixed(2)}% of equity incl. fees`);
+  chk(7,'Risk:reward',band(plan.rr,GATE_LIM.rr,false),`${plan.rr.toFixed(2)} : 1 after fees (targets ${TP_R.join('/')}R, closing ${TP_SHARE.map(x=>x*100).join('/')}%)`);
+  const losses=A.closed.filter(t=>A.netOf(t)<0),last=losses[0],mins=last?(now-last.closeAt)/6e4:1e9;let k=0;for(const t of A.closed){if(A.netOf(t)<0)k++;else break}
+  chk(8,'Revenge trade',mins<GATE_LIM.revenge[1]||(k>=3&&mins<30)?'FAIL':mins<GATE_LIM.revenge[0]?'WARN':'PASS',k>=3&&mins<30?`${k} losses in a row, last ${mins.toFixed(0)} min ago: cooling off for 30 min`:last&&mins<60?`Last loss ${mins.toFixed(0)} min ago`:'No recent losses');
+  const day0=new Date();day0.setHours(0,0,0,0);const today=sum(A.closed.filter(t=>t.closeAt>=day0.getTime()).map(A.netOf)),start=eq-today,dl=Math.max(0,-today)/Math.max(1e-9,start)*100;
+  chk(9,'Daily loss limit',band(dl,GATE_LIM.day),dl?`Down ${dl.toFixed(1)}% today (stop for the day at ${GATE_LIM.day[1]}%)`:'No loss today');
+  // ghost warnings
+  const effLev=(A.exp+plan.notional)/eq;if(effLev>GATE_LIM.maxExp)ghosts.push(['Su Zhu (3AC)',`Effective leverage ${effLev.toFixed(1)}× after this trade. “The supercycle never ends.”`]);
+  if(s>0&&r.chg>20)ghosts.push(['Isaac Newton',`Buying after a ${pct(r.chg)} pump in 24h.`]);
+  if(acct==='fut'&&s>0&&b1<-1.5)ghosts.push(['Lehman Brothers','Leverage while the market is falling. “The music stopped. We were still dancing.”']);
+  const near=A.open.find(p=>p.liq&&Math.abs((p.mark||p.entry)-p.liq)/(p.mark||p.entry)<0.02);if(near)ghosts.push(['BitMEX Rekt Trader',`${near.base} is within 2% of liquidation.`]);
+  const under=A.open.filter(p=>now-p.openAt>4*36e5&&(acct==='fut'?futUnreal(p):unreal(p))<0);if(under.length)ghosts.push(['SVB',`${under.map(p=>p.base).join(', ')} underwater for 4h+. “We held too long.”`]);
+  const fails=C.filter(c=>c.st==='FAIL').length,warns=C.filter(c=>c.st==='WARN').length;
+  let verdict=fails?'DO NOT PROCEED':warns>=2?'PROCEED WITH CAUTION':'PROCEED';
+  if(!fails&&warns&&A.streak>=3){verdict='DO NOT PROCEED';ghosts.push(['Do Kwon',`${A.streak} warned trades in a row. Waiting for a clean setup with no warnings.`])}
+  return{checks:C,ghosts,verdict,pass:C.length-fails-warns,warns,fails,mult:verdict==='PROCEED WITH CAUTION'?0.5:verdict==='PROCEED'?1:0,effLev}}
+function gateWhy(g){const f=g.checks.filter(c=>c.st==='FAIL').map(c=>c.label);return f.length?'Gate: '+f.join(', '):g.ghosts.length?'Gate: '+g.ghosts[g.ghosts.length-1][0]:'Gate'}
+function dskip(r,why){if(D.skipped.some(x=>x.base===r.base&&x.why===why&&Date.now()-x.t<36e5))return;D.skipped.unshift({t:Date.now(),base:r.base,dir:r.dir,why});if(D.skipped.length>20)D.skipped.length=20}
+const SQ={bid:{},ask:{},at:0};
+async function spotQuotes(syms){const j=await getJSON(SPOT+'/api/v3/ticker/bookTicker?symbols='+encodeURIComponent(JSON.stringify(syms)),8000);for(const x of j){SQ.bid[x.symbol]=+x.bidPrice;SQ.ask[x.symbol]=+x.askPrice}SQ.at=Date.now()}
+function spotPlan(r){
+  const ask=SQ.ask[r.sym];if(!ask||Date.now()-SQ.at>30000)return null;
+  const fee=D.cfg.fee/100,slip=D.cfg.slip/100,fillPx=ask*(1+slip),dist=Math.abs(r.entry-r.sl)/r.entry*fillPx,eq=equity();
+  const cash=D.bal-sum(D.open.map(p=>p.left*p.entry));
+  let qty=eq*S.risk/100/(dist+fillPx*fee*2+fillPx*slip);
+  const maxN=Math.min(cash*0.98,eq*GATE_LIM.pos[1]/100*0.995);let capped=false;if(qty*fillPx>maxN){qty=Math.max(0,maxN/fillPx);capped=true}
+  return{fill:fillPx,dist,sl:fillPx-dist,tp:TP_R.map(k=>fillPx+k*dist),qty,notional:qty*fillPx,alloc:qty*fillPx,riskUsd:qty*(dist+fillPx*fee*2+fillPx*slip),rr:rrNet(fillPx,dist,fee,fee,slip),capped}}
 function demoOpen(r){
-  if(agentBlocked(r))return false;
+  if(r.dir!=='LONG')return false; // spot cannot short: shorts go to the futures demo
+  const ab=agentBlocked(r);if(ab){dskip(r,ab);return false}
   if(D.open.some(p=>p.sym===r.sym)||D.open.length>=D.cfg.maxOpen||(D.cool[r.sym]||0)>Date.now())return false;
-  const dist=Math.abs(r.entry-r.sl);if(!(dist>0)||D.bal<=0)return false;
-  let qty=D.bal*S.risk/100/dist;const cap=D.bal*10;if(qty*r.entry>cap)qty=cap/r.entry;
-  const fee=qty*r.entry*D.cfg.fee/100;
-  D.open.push({ctx:snap(r),id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,entry:r.entry,sl:r.sl,sl0:r.sl,tp:r.tp.slice(),qty,left:qty,
-    openAt:Date.now(),score:r.score,realized:-fee,fees:fee,hit:0,last:r.entry,exits:[]});
-  D.bal-=fee;return true;
+  const pl=spotPlan(r);if(!pl||!(pl.dist>0))return false;
+  const g=preTradeGate(r,'spot',pl);if(!g.mult){dskip(r,gateWhy(g));return false}
+  const qty=pl.qty*g.mult;if(qty*pl.fill<5){dskip(r,'Order below the $5 minimum (no free cash or position cap)');return false}
+  const fee=qty*pl.fill*D.cfg.fee/100;
+  D.open.push({ctx:Object.assign(snap(r),{gate:{v:g.verdict,w:g.warns}}),id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,entry:pl.fill,sl:pl.sl,sl0:pl.sl,tp:pl.tp,qty,left:qty,
+    openAt:Date.now(),score:r.score,realized:-fee,fees:fee,hit:0,last:pl.fill,exits:[],gate:g.verdict,capped:pl.capped});
+  D.bal-=fee;D.warnStreak=g.warns?(D.warnStreak||0)+1:0;return true;
 }
 function fill(p,q,price,why){
   const fee=q*price*D.cfg.fee/100,pnl=sgn(p)*(price-p.entry)*q-fee;
@@ -921,11 +1024,12 @@ function finish(p,why){
   D.cool[p.sym]=Date.now()+15*60e3;
 }
 function step(p,price){
-  p.last=price;const s=sgn(p);
-  if(s*(price-p.sl)<=0){fill(p,p.left,price,p.hit===0?'Stop loss':p.hit===1?'Breakeven stop':'Profit stop');return}
-  if(p.hit<1&&s*(price-p.tp[0])>=0){p.hit=1;fill(p,p.qty*0.5,p.tp[0],'TP1');p.sl=p.entry}
-  if(p.left>0&&p.hit<2&&s*(price-p.tp[1])>=0){p.hit=2;fill(p,p.qty*0.3,p.tp[1],'TP2');p.sl=p.tp[0]}
-  if(p.left>0&&p.hit<3&&s*(price-p.tp[2])>=0){p.hit=3;fill(p,p.left,p.tp[2],'TP3');return}
+  p.last=price;const s=sgn(p),slip=(D.cfg.slip||0)/100,fee=D.cfg.fee/100;
+  if(s*(price-p.sl)<=0){const px=(s>0?Math.min(price,p.sl):Math.max(price,p.sl))*(1-s*slip);fill(p,p.left,px,p.hit===0?'Stop loss':p.hit===1?'Breakeven stop':'Profit stop');return}
+  const thru=k=>s*(price-p.tp[k]*(1+s*TP_BUF))>=0;
+  if(p.hit<1&&thru(0)){p.hit=1;fill(p,p.qty*TP_SHARE[0],p.tp[0],'TP1');p.sl=p.entry*(1+s*fee*2.2)}
+  if(p.left>0&&p.hit<2&&thru(1)){p.hit=2;fill(p,p.qty*TP_SHARE[1],p.tp[1],'TP2');p.sl=p.tp[0]}
+  if(p.left>0&&p.hit<3&&thru(2)){p.hit=3;fill(p,p.left,p.tp[2],'TP3');return}
 }
 let pollOk=false;
 async function pollPrices(){
@@ -940,10 +1044,12 @@ async function pollPrices(){
   }catch(e){pollOk=false}
   renderDemo();
 }
-function demoAfterScan(){
+async function demoAfterScan(){
   if(!D.cfg.auto)return;
-  let n=0;for(const r of STATE.rows.filter(r=>r.signal==='READY').sort((a,b)=>b.score-a.score))if(demoOpen(r))n++;
-  if(n){dsave();render()}
+  const ready=STATE.rows.filter(r=>r.signal==='READY'&&r.dir==='LONG').sort((a,b)=>b.score-a.score);if(!ready.length)return;
+  try{await spotQuotes(ready.map(r=>r.sym))}catch(e){return} // fresh bid/ask at the moment of entry, never the stale scan price
+  let n=0;for(const r of ready)if(demoOpen(r))n++;
+  dsave();renderDemo();if(n)render();
 }
 function dur(ms){const m=Math.round(ms/60000);return m<60?m+'m':Math.floor(m/60)+'h '+(m%60)+'m'}
 const money=n=>(n<0?'−$':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -970,12 +1076,13 @@ function renderDemo(){
   $('#tabBadge').innerHTML=`<span class="${cls(tot)}">${smoney(tot)}</span>`;
   $('#openNote').innerHTML=`<span class="live ${D.cfg.auto?'':'off'}"></span>${D.open.length} of ${D.cfg.maxOpen} slots used · auto-trade ${D.cfg.auto?'on':'off'}${D.open.length?(pollOk?' · prices live every 5 s':' · waiting for prices'):''}`;
   $('#dopen').innerHTML=D.open.length?D.open.map(p=>{const u=unreal(p),up=u/(p.entry*p.left)*100,next=p.hit<3?p.tp[p.hit]:null;
-    return `<tr><td><b>${p.base}</b> <span class="mut">${p.score}</span></td><td><span class="pill ${p.dir}">${p.dir}</span></td><td>${fp(p.entry)}</td><td>${fp(p.last)}</td>
+    return `<tr><td><b>${p.base}</b> <span class="mut">${p.score}</span>${p.gate==='PROCEED WITH CAUTION'?' <span class="tag warn">½ size</span>':''}${p.capped?' <span class="tag warn">capped</span>':''}${Date.now()-p.openAt>4*36e5&&u<0?' <span class="tag warn">underwater 4h+</span>':''}</td><td><span class="pill ${p.dir}">${p.dir}</span></td><td>${fp(p.entry)}</td><td>${fp(p.last)}</td>
     <td class="slc">${fp(p.sl)}${p.hit?` <span class="mut">${p.hit===1?'BE':'locked'}</span>`:''}</td><td class="tpc">${next?fp(next)+' <span class="mut">TP'+(p.hit+1)+'</span>':'—'}</td>
     <td>${fu(p.left*p.last)} <span class="mut">${(p.left/p.qty*100).toFixed(0)}%</span></td>
     <td><span class="${cls(u+p.realized)}">${smoney(u+p.realized)}</span> <span class="mut">${pct(isFinite(up)?up:0)}</span></td><td>${signalNow(p)}</td><td>${dur(Date.now()-p.openAt)}</td>
     <td><button type="button" data-close="${p.id}">Close</button></td></tr>`}).join('')
     :`<tr><td colspan="11" class="mut" style="text-align:left">No open trades. ${D.cfg.auto?'The demo opens a trade automatically on the next READY signal.':'Turn on “Auto-take READY signals” to start.'}</td></tr>`;
+  $('#dskip').innerHTML=D.skipped&&D.skipped.length?'<b>Skipped signals:</b> '+D.skipped.slice(0,5).map(x=>`${x.base} (${x.why})`).join(' · '):'';
   $('#histNote').textContent=C.length?`${C.length} closed trades since ${new Date(D.since).toLocaleDateString()}`:'';
   $('#dhist').innerHTML=C.length?C.slice(0,200).map(t=>`<tr><td class="mut">${new Date(t.closeAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
     <td><b>${t.base}</b></td><td><span class="pill ${t.dir}">${t.dir}</span></td><td>${fp(t.entry)}</td><td>${fp(t.exitAvg)}</td>
@@ -1001,8 +1108,8 @@ function drawCurveFor(cvs,view,pts,base){
   g.lineTo(x(pts.length-1),y(lo));g.lineTo(x(0),y(lo));g.closePath();g.globalAlpha=.12;g.fillStyle=c;g.fill();g.globalAlpha=1;
   g.beginPath();g.arc(x(pts.length-1),y(pts[pts.length-1]),4,0,Math.PI*2);g.fillStyle=c;g.fill();
 }
-function loadDemoForm(){$('#d_start').value=D.cfg.start;$('#d_maxOpen').value=D.cfg.maxOpen;$('#d_fee').value=D.cfg.fee;$('#d_auto').checked=D.cfg.auto}
-[['start',100],['maxOpen',1],['fee',0]].forEach(([k,min])=>$('#d_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>=min){D.cfg[k]=k==='maxOpen'?Math.round(v):v;dsave();renderDemo()}}));
+function loadDemoForm(){$('#d_start').value=D.cfg.start;$('#d_maxOpen').value=D.cfg.maxOpen;$('#d_fee').value=D.cfg.fee;$('#d_slip').value=D.cfg.slip;$('#d_auto').checked=D.cfg.auto}
+[['start',100],['maxOpen',1],['fee',0],['slip',0]].forEach(([k,min])=>$('#d_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>=min){D.cfg[k]=k==='maxOpen'?Math.round(v):v;dsave();renderDemo()}}));
 $('#d_auto').addEventListener('change',e=>{D.cfg.auto=e.target.checked;dsave();if(D.cfg.auto)demoAfterScan();renderDemo()});
 let resetArm=0;
 $('#d_reset').onclick=()=>{const b=$('#d_reset');
@@ -1018,7 +1125,7 @@ window.addEventListener('resize',()=>{drawCurve();renderFut()});
 setInterval(pollPrices,5000);
 
 /* ---------- futures demo (USDⓈ-M, isolated margin, leverage) ---------- */
-const FDEF={start:1000,lev:10,risk:1,maxOpen:5,maker:0.02,taker:0.05,bnb:false,slip:0.03,mmr:1.0,mmrMajor:0.4,maxHold:60,auto:true};
+const FDEF={start:1000,lev:10,risk:1,maxOpen:5,maker:0.02,taker:0.05,bnb:false,slip:0.03,mmr:1.0,mmrMajor:0.4,maxExp:3,auto:true};
 let F={cfg:Object.assign({},FDEF),base:1000,bal:1000,open:[],closed:[],curve:[],cool:{},skipped:[],since:Date.now()};
 try{const x=JSON.parse(localStorage.getItem('scalpRadarFutV1')||'null');if(x){F=Object.assign(F,x);F.cfg=Object.assign({},FDEF,x.cfg)}}catch(e){}
 if(!F.curve.length)F.curve=[{t:Date.now(),b:F.bal}];
@@ -1039,28 +1146,30 @@ const futUnreal=p=>sgn(p)*(p.mark-p.entry)*p.left;
 const futEquity=()=>F.bal+sum(F.open.map(futUnreal));
 function fskip(r,why){F.skipped.unshift({t:Date.now(),base:r.base,dir:r.dir,why});if(F.skipped.length>20)F.skipped.length=20}
 
+function futPlan(r){
+  const c=F.cfg,bid=FX.bid[r.sym],ask=FX.ask[r.sym];if(!bid||!ask||Date.now()-FX.at>30000)return null;
+  const s=r.dir==='LONG'?1:-1,mid=(bid+ask)/2,fillPx=(s>0?ask:bid)*(1+s*c.slip/100),dist=Math.abs(r.entry-r.sl)/r.entry*fillPx,lev=c.lev;
+  const sl=fillPx-s*dist,tp=TP_R.map(k=>fillPx+s*k*dist),mmr=(/^(BTC|ETH)USDT$/.test(r.sym)?c.mmrMajor:c.mmr)/100;
+  const liq=s>0?fillPx*(1-1/lev)/(1-mmr):fillPx*(1+1/lev)/(1+mmr),fr=feeRate(false),fm=feeRate(true),eq=futEquity();
+  const perUnit=dist+fillPx*fr+sl*fr+sl*2*c.slip/100;let qty=eq*c.risk/100/perUnit,capped='';
+  const maxM=Math.max(0,futAvail())*0.98/(fillPx/lev+fillPx*fr);if(qty>maxM){qty=maxM;capped='free margin'}
+  const expRoom=Math.max(0,(c.maxExp||GATE_LIM.maxExp)*eq-sum(F.open.map(p=>p.left*(p.mark||p.entry))))/fillPx;if(qty>expRoom){qty=expRoom;capped='max exposure'}
+  const book=(s>0?r.askD:r.bidD)||0;if(book&&qty*fillPx>book*0.25){qty=book*0.25/fillPx;capped='order book depth'} // never take more than 25% of the visible book
+  return{fill:fillPx,mid,dist,sl,tp,liq,lev,mmr,qty,notional:qty*fillPx,alloc:qty*fillPx/lev,riskUsd:qty*perUnit,rr:rrNet(fillPx,dist,fr,fm,2*c.slip/100),capped,liqBad:s>0?sl<=liq:sl>=liq}}
 function futOpen(r){
   const c=F.cfg;
   if(!r.hasFut||F.open.some(p=>p.sym===r.sym)||F.open.length>=c.maxOpen||(F.cool[r.sym]||0)>Date.now())return false;
   const ab=agentBlocked(r);if(ab){if(!F.skipped.some(x=>x.base===r.base&&Date.now()-x.t<36e5))fskip(r,ab);return false}
-  const bid=FX.bid[r.sym],ask=FX.ask[r.sym];if(!bid||!ask)return false;
-  const s=r.dir==='LONG'?1:-1,mid=(bid+ask)/2,ideal=s>0?ask:bid,fill=ideal*(1+s*c.slip/100);
-  const dist=Math.abs(r.entry-r.sl)/r.entry*fill;
-  const sl=fill-s*dist,tp=[1,2,3].map(k=>fill+s*k*dist),lev=c.lev;
-  const mmr=(/^(BTC|ETH)USDT$/.test(r.sym)?c.mmrMajor:c.mmr)/100;
-  const liq=s>0?fill*(1-1/lev)/(1-mmr):fill*(1+1/lev)/(1+mmr);
-  if(s>0?sl<=liq:sl>=liq){fskip(r,`Stop ${fp(sl)} is beyond liquidation ${fp(liq)} at ${lev}×. Lower the leverage.`);return false}
-  const fr=feeRate(false),perUnit=dist+fill*fr+sl*fr+sl*c.slip/100;
-  let qty=F.bal*c.risk/100/perUnit;
-  const maxQty=Math.max(0,futAvail())*0.98/(fill/lev+fill*fr);
-  let capped=false;if(qty>maxQty){qty=maxQty;capped=true}
-  if(qty*fill<5){fskip(r,'Not enough free margin for the $5 minimum order');return false}
-  const notional=qty*fill,margin=notional/lev,fee=notional*fr;
+  const pl=futPlan(r);if(!pl||!(pl.dist>0))return false;
+  if(pl.liqBad){fskip(r,`Stop ${fp(pl.sl)} is beyond liquidation ${fp(pl.liq)} at ${pl.lev}×. Lower the leverage.`);return false}
+  const g=preTradeGate(r,'fut',pl);if(!g.mult){if(!F.skipped.some(x=>x.base===r.base&&x.why===gateWhy(g)&&Date.now()-x.t<36e5))fskip(r,gateWhy(g));return false}
+  const qty=pl.qty*g.mult;if(qty*pl.fill<5){fskip(r,`Order below the $5 minimum (limited by ${pl.capped||'size'})`);return false}
+  const notional=qty*pl.fill,margin=notional/pl.lev,fee=notional*feeRate(false);
   F.bal-=fee;
-  F.open.push({ctx:snap(r),id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,lev,mmr,entry:fill,sl,sl0:sl,tp,liq,qty,left:qty,margin,
-    openAt:Date.now(),score:r.score,fees:fee,funding:0,gross:0,slip:Math.abs(fill-mid)*qty,hit:0,mark:FX.mark[r.sym]||fill,mid,
-    nextFund:FX.next[r.sym]||0,capped,exits:[]});
-  F.curve.push({t:Date.now(),b:F.bal});
+  F.open.push({ctx:Object.assign(snap(r),{gate:{v:g.verdict,w:g.warns}}),id:Date.now()+r.sym,sym:r.sym,base:r.base,dir:r.dir,lev:pl.lev,mmr:pl.mmr,entry:pl.fill,sl:pl.sl,sl0:pl.sl,tp:pl.tp,liq:pl.liq,qty,left:qty,margin,
+    openAt:Date.now(),score:r.score,fees:fee,funding:0,gross:0,slip:Math.abs(pl.fill-pl.mid)*qty,hit:0,mark:FX.mark[r.sym]||pl.fill,mid:pl.mid,
+    nextFund:FX.next[r.sym]||0,capped:!!pl.capped||g.mult<1,gate:g.verdict,exits:[]});
+  F.curve.push({t:Date.now(),b:F.bal});F.warnStreak=g.warns?(F.warnStreak||0)+1:0;
   return true;
 }
 function futFill(p,q,price,why,maker,mid){
@@ -1090,11 +1199,12 @@ function futStep(p){
   if(p.nextFund&&Date.now()>=p.nextFund){const amt=-s*p.left*mark*(FX.rate[p.sym]||0);p.funding+=amt;F.bal+=amt;
     F.curve.push({t:Date.now(),b:F.bal});p.nextFund=FX.next[p.sym]>p.nextFund?FX.next[p.sym]:p.nextFund+8*36e5}
   // stop-market order rests on the exchange: it triggers at the stop price and fills with 2x normal slippage
-  if(s*(mid-p.sl)<=0||s*(mark-p.sl)<=0){futFill(p,p.left,p.sl*(1-s*2*c.slip/100),p.hit===0?'Stop loss':p.hit===1?'Breakeven stop':'Profit stop',false,p.sl);return}
+  if(s*(mid-p.sl)<=0||s*(mark-p.sl)<=0){const gap=s>0?Math.min(p.sl,exitPx):Math.max(p.sl,exitPx);futFill(p,p.left,gap*(1-s*2*c.slip/100),p.hit===0?'Stop loss':p.hit===1?'Breakeven stop':'Profit stop',false,p.sl);return}
   if(s*(mark-p.liq)<=0){futLiquidate(p);return}
-  if(p.hit<1&&s*(exitPx-p.tp[0])>=0){p.hit=1;futFill(p,p.qty*0.5,p.tp[0],'TP1',true);p.sl=p.entry}
-  if(p.left>0&&p.hit<2&&s*(exitPx-p.tp[1])>=0){p.hit=2;futFill(p,p.qty*0.3,p.tp[1],'TP2',true);p.sl=p.tp[0]}
-  if(p.left>0&&p.hit<3&&s*(exitPx-p.tp[2])>=0){p.hit=3;futFill(p,p.left,p.tp[2],'TP3',true);return}
+  const thru=k=>s*(exitPx-p.tp[k]*(1+s*TP_BUF))>=0; // limit orders need price to trade through, not just touch
+  if(p.hit<1&&thru(0)){p.hit=1;futFill(p,p.qty*TP_SHARE[0],p.tp[0],'TP1',true);p.sl=p.entry*(1+s*(feeRate(false)*2.2))} // breakeven after fees
+  if(p.left>0&&p.hit<2&&thru(1)){p.hit=2;futFill(p,p.qty*TP_SHARE[1],p.tp[1],'TP2',true);p.sl=p.tp[0]}
+  if(p.left>0&&p.hit<3&&thru(2)){p.hit=3;futFill(p,p.left,p.tp[2],'TP3',true);return}
 }
 async function futPoll(){
   if(!F.open.length){renderFut();return}
@@ -1140,7 +1250,7 @@ function renderFut(){
     return `<tr><td><b>${p.base}</b></td><td><span class="pill ${p.dir}">${p.dir} ${p.lev}×</span></td><td>${fp(p.entry)}</td><td>${fp(p.mark)}</td>
     <td class="${dl<2?'dn':'mut'}">${fp(p.liq)} <span class="mut">${dl.toFixed(1)}%</span></td>
     <td class="slc">${fp(p.sl)}${p.hit?` <span class="mut">${p.hit===1?'BE':'locked'}</span>`:''}</td><td class="tpc">${next?fp(next)+' <span class="mut">TP'+(p.hit+1)+'</span>':'—'}</td>
-    <td>${fu(p.left*p.mark)}${p.capped?' <span class="tag warn">capped</span>':''}</td><td>${money(m)}</td>
+    <td>${fu(p.left*p.mark)}${p.gate==='PROCEED WITH CAUTION'?' <span class="tag warn">½ size</span>':p.capped?' <span class="tag warn">capped</span>':''}${Date.now()-p.openAt>4*36e5&&u<0?' <span class="tag warn">underwater 4h+</span>':''}</td><td>${money(m)}</td>
     <td><span class="${cls(u)}">${smoney(u)}</span></td><td class="${cls(p.funding)}">${p.funding?smoney(p.funding):'—'}</td>
     <td><span class="${cls(roe)}">${pct(roe,1)}</span></td><td>${signalNow(p)}</td><td>${dur(Date.now()-p.openAt)}</td>
     <td><button type="button" data-fclose="${p.id}">Close</button></td></tr>`}).join('')
@@ -1155,10 +1265,10 @@ function renderFut(){
     :`<tr><td colspan="13" class="mut" style="text-align:left">Closed futures trades will appear here with gross P&amp;L, fees, funding and net result.</td></tr>`;
   drawCurveFor('#eqF','#viewFut',F.curve.map(p=>p.b).concat([eq]),F.base);
 }
-function loadFutForm(){['start','lev','risk','maxOpen','maker','taker','slip','mmr'].forEach(k=>$('#f_'+k).value=F.cfg[k]);$('#f_bnb').checked=F.cfg.bnb;$('#f_auto').checked=F.cfg.auto;updLevNote()}
+function loadFutForm(){['start','lev','risk','maxOpen','maker','taker','slip','mmr','maxExp'].forEach(k=>$('#f_'+k).value=F.cfg[k]);$('#f_bnb').checked=F.cfg.bnb;$('#f_auto').checked=F.cfg.auto;updLevNote()}
 function updLevNote(){const c=F.cfg,mmr=c.mmr/100,lq=(1-(1-1/c.lev)/(1-mmr))*100;
   $('#f_levNote').textContent=`At ${c.lev}× a ${lq.toFixed(1)}% move against you liquidates the position (alts). Stops wider than that are skipped. Your loss at the stop stays ${c.risk}% of the balance at any leverage; higher leverage only locks less margin and moves liquidation closer.`}
-[['start',100],['lev',1],['risk',0.1],['maxOpen',1],['maker',0],['taker',0],['slip',0],['mmr',0.1]].forEach(([k,min])=>$('#f_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);
+[['start',100],['lev',1],['risk',0.1],['maxOpen',1],['maker',0],['taker',0],['slip',0],['mmr',0.1],['maxExp',0.5]].forEach(([k,min])=>$('#f_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);
   if(isFinite(v)&&v>=min){F.cfg[k]=k==='maxOpen'||k==='lev'?Math.round(Math.min(v,k==='lev'?125:50)):v;fsave();updLevNote();renderFut()}}));
 $('#f_bnb').addEventListener('change',e=>{F.cfg.bnb=e.target.checked;fsave();renderFut()});
 $('#f_auto').addEventListener('change',e=>{F.cfg.auto=e.target.checked;fsave();if(F.cfg.auto)futAfterScan();renderFut()});
@@ -1178,7 +1288,7 @@ function signalNow(p){const r=STATE.rows.find(x=>x.sym===p.sym);if(!r)return'<sp
   return `<span class="pill ${r.signal} ${r.dir}">${r.signal==='WAIT'?'WAIT':r.signal+' '+r.dir}</span>`}
 
 /* ---------- wiring ---------- */
-const ids=['minVol','deep','refresh','account','risk','ready','indPct','lev','spotFee'];
+const ids=['minVol','deep','refresh','account','risk','ready','indPct','lev','spotFee','s2Thr','s2Band','s2Smooth'];
 function loadForm(){ids.forEach(k=>$('#s_'+k).value=S[k]);$('#s_futOnly').checked=S.futOnly;$('#s_side').value=S.side;$('#s_sound').checked=S.sound;$('#btnAuto').textContent='Auto-scan: '+(S.auto?'on':'off')}
 ids.forEach(k=>$('#s_'+k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>0){S[k]=v;save();if(k==='refresh')nextAt=Date.now()+v*60e3;if(['account','risk','lev','spotFee'].includes(k)&&STATE.rows.length){render();if(STATE.open&&!$('#drawer').hidden)openDrawer(STATE.open)}}}));
 $('#s_futOnly').addEventListener('change',e=>{S.futOnly=e.target.checked;save()});
